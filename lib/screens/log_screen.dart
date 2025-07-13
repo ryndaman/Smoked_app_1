@@ -1,9 +1,11 @@
+// lib/screens/log_screen.dart
+
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:smoked_1/models/smoke_event.dart';
+import 'package:provider/provider.dart';
 import 'package:smoked_1/models/user_settings.dart';
-import 'package:smoked_1/services/local_storage_service.dart';
+import 'package:smoked_1/providers/smoke_data_provider.dart';
 
 class LogScreen extends StatefulWidget {
   const LogScreen({super.key});
@@ -12,18 +14,13 @@ class LogScreen extends StatefulWidget {
   State<LogScreen> createState() => _LogScreenState();
 }
 
-class _LogScreenState extends State<LogScreen> with SingleTickerProviderStateMixin {
-  final LocalStorageService _storageService = LocalStorageService();
-  late UserSettings _settings;
-  double _totalCostInBase = 0.0;
-  int _totalSticks = 0;
-  bool _isLoading = true;
+class _LogScreenState extends State<LogScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),
@@ -36,135 +33,130 @@ class _LogScreenState extends State<LogScreen> with SingleTickerProviderStateMix
     super.dispose();
   }
 
-  Future<void> _loadData() async {
-    if (mounted) {
-      setState(() {
-        _isLoading = true;
-      });
-    }
-    final loadedSettings = await _storageService.getSettings();
-    final List<SmokeEvent> loadedEvents = await _storageService.getSmokeEvents();
-    double calculatedCost = 0.0;
-    for (var event in loadedEvents) {
-      calculatedCost += event.pricePerStick;
-    }
-    if (mounted) {
-      setState(() {
-        _settings = loadedSettings;
-        _totalCostInBase = calculatedCost;
-        _totalSticks = loadedEvents.length;
-        _isLoading = false;
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final rate = _isLoading ? 1.0 : _settings.exchangeRates[_settings.preferredCurrency] ?? 1.0;
-    final displayCost = _totalCostInBase * rate;
-    final formatter = NumberFormat.currency(
-      locale: 'id_ID',
-      symbol: _isLoading ? "" : '${_settings.preferredCurrency} ',
-      decimalDigits: 0,
-    );
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Smoked'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: _isLoading ? null : _showSettingsDialog,
+    return Consumer<SmokeDataProvider>(
+      builder: (context, dataProvider, child) {
+        if (dataProvider.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final rate = dataProvider.settings
+                .exchangeRates[dataProvider.settings.preferredCurrency] ??
+            1.0;
+        final displayCost = dataProvider.totalCostInBase * rate;
+        final formatter = NumberFormat.currency(
+          locale: 'id_ID',
+          symbol: '${dataProvider.settings.preferredCurrency} ',
+          decimalDigits: 0,
+        );
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Smoked'),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.settings),
+                // FIXED: Call the method without passing the context.
+                onPressed: () => _showSettingsDialog(dataProvider),
+              ),
+              Tooltip(
+                message: 'Log Missed Packs',
+                child: IconButton(
+                  icon: const Icon(Icons.edit_calendar_outlined),
+                  // FIXED: Call the method without passing the context.
+                  onPressed: () => _showManualEntryDialog(dataProvider),
+                ),
+              ),
+            ],
           ),
-          Tooltip(
-            message: 'Log Missed Packs',
-            child: IconButton(
-              icon: const Icon(Icons.edit_calendar_outlined),
-              onPressed: _isLoading ? null : _showManualEntryDialog,
-            ),
-          ),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        "Total Money Turned to Smoke",
-                        style: TextStyle(
-                          fontSize: 22,
-                          color: Theme.of(context).colorScheme.secondary,
-                        ),
+          body: SingleChildScrollView(
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      "Total Money Turned to Smoke",
+                      style: TextStyle(
+                        fontSize: 22,
+                        color: Theme.of(context).colorScheme.secondary,
                       ),
-                      const SizedBox(height: 8),
-                      AnimatedBuilder(
-                        animation: _animationController,
-                        builder: (context, child) {
-                          final sineValue = sin(4 * pi * _animationController.value);
-                          return Transform.translate(
-                            offset: Offset(sineValue * 15, 0),
-                            child: child,
-                          );
-                        },
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            formatter.format(displayCost),
-                            style: TextStyle(
-                              fontSize: 60,
-                              fontWeight: FontWeight.w900,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
+                    ),
+                    const SizedBox(height: 8),
+                    AnimatedBuilder(
+                      animation: _animationController,
+                      builder: (context, child) {
+                        final sineValue =
+                            sin(4 * pi * _animationController.value);
+                        return Transform.translate(
+                          offset: Offset(sineValue * 15, 0),
+                          child: child,
+                        );
+                      },
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          formatter.format(displayCost),
+                          style: TextStyle(
+                            fontSize: 60,
+                            fontWeight: FontWeight.w900,
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                         ),
                       ),
-                      Text(
-                        "from $_totalSticks sticks",
+                    ),
+                    Text(
+                      "from ${dataProvider.totalSticks} sticks",
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    const SizedBox(height: 48),
+                    ElevatedButton(
+                      onPressed: () async {
+                        _animationController.forward(from: 0.0);
+                        await dataProvider.logSmokeEvent();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Colors.white,
+                        shape: const CircleBorder(),
+                        padding: const EdgeInsets.all(60),
+                        elevation: 8,
+                        shadowColor: const Color.fromRGBO(0, 0, 0, 0.4),
+                      ),
+                      child: const Text(
+                        "I Smoked\nOne",
+                        textAlign: TextAlign.center,
                         style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey[600],
-                        ),
+                            fontSize: 24, fontWeight: FontWeight.bold),
                       ),
-                      const SizedBox(height: 48),
-                      ElevatedButton(
-                        onPressed: () async {
-                          _animationController.forward(from: 0.0);
-                          await _storageService.logSmokeEvent();
-                          _loadData();
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).colorScheme.primary,
-                          foregroundColor: Colors.white,
-                          shape: const CircleBorder(),
-                          padding: const EdgeInsets.all(60),
-                          elevation: 8,
-                          shadowColor: const Color.fromRGBO(0, 0, 0, 0.4),
-                        ),
-                        child: const Text(
-                          "I Smoked\nOne",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
+          ),
+        );
+      },
     );
   }
 
-  void _showSettingsDialog() {
-    final priceController = TextEditingController(text: _settings.pricePerPack.toString());
-    final cigsController = TextEditingController(text: _settings.cigsPerPack.toString());
-    String selectedCurrency = _settings.preferredCurrency;
+  // FIXED: Method no longer takes BuildContext as a parameter.
+  void _showSettingsDialog(SmokeDataProvider dataProvider) {
+    final priceController = TextEditingController(
+        text: dataProvider.settings.pricePerPack.toString());
+    final cigsController = TextEditingController(
+        text: dataProvider.settings.cigsPerPack.toString());
+    String selectedCurrency = dataProvider.settings.preferredCurrency;
+
     showDialog(
+      // It uses the State's own `context` property.
       context: context,
-      builder: (context) => StatefulBuilder(
+      builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
             title: const Text('Update Settings'),
@@ -175,7 +167,8 @@ class _LogScreenState extends State<LogScreen> with SingleTickerProviderStateMix
                   DropdownButtonFormField<String>(
                     value: selectedCurrency,
                     decoration: const InputDecoration(labelText: 'Currency'),
-                    items: _settings.exchangeRates.keys.map((String currency) {
+                    items: dataProvider.settings.exchangeRates.keys
+                        .map((String currency) {
                       return DropdownMenuItem<String>(
                         value: currency,
                         child: Text(currency),
@@ -190,11 +183,13 @@ class _LogScreenState extends State<LogScreen> with SingleTickerProviderStateMix
                   const SizedBox(height: 16),
                   TextField(
                       controller: priceController,
-                      decoration: InputDecoration(labelText: 'Price per Pack ($selectedCurrency)'),
+                      decoration: InputDecoration(
+                          labelText: 'Price per Pack ($selectedCurrency)'),
                       keyboardType: TextInputType.number),
                   TextField(
                       controller: cigsController,
-                      decoration: const InputDecoration(labelText: 'Cigarettes per Pack'),
+                      decoration: const InputDecoration(
+                          labelText: 'Cigarettes per Pack'),
                       keyboardType: TextInputType.number),
                 ],
               ),
@@ -203,16 +198,20 @@ class _LogScreenState extends State<LogScreen> with SingleTickerProviderStateMix
               ElevatedButton(
                 child: const Text('Save'),
                 onPressed: () async {
-                  final newPrice = int.tryParse(priceController.text) ?? _settings.pricePerPack;
-                  final newCigs = int.tryParse(cigsController.text) ?? _settings.cigsPerPack;
-                  await _storageService.saveSettings(UserSettings(
+                  final newPrice = int.tryParse(priceController.text) ??
+                      dataProvider.settings.pricePerPack;
+                  final newCigs = int.tryParse(cigsController.text) ??
+                      dataProvider.settings.cigsPerPack;
+
+                  final navigator = Navigator.of(dialogContext);
+
+                  await dataProvider.updateSettings(UserSettings(
                     pricePerPack: newPrice,
                     cigsPerPack: newCigs,
                     preferredCurrency: selectedCurrency,
                   ));
-                  if (!context.mounted) return;
-                  Navigator.of(context).pop();
-                  _loadData();
+
+                  navigator.pop();
                 },
               ),
             ],
@@ -222,32 +221,48 @@ class _LogScreenState extends State<LogScreen> with SingleTickerProviderStateMix
     );
   }
 
-  void _showManualEntryDialog() async {
+  // FIXED: Method no longer takes BuildContext as a parameter.
+  void _showManualEntryDialog(SmokeDataProvider dataProvider) async {
     final packsController = TextEditingController();
+
+    // The await call happens here. It uses the State's own `context`.
     final dateRange = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
     );
-    if (dateRange == null) return;
-    if (!mounted) return;
+
+    // This is the definitive pattern: check `mounted` right after an `await`.
+    if (!mounted || dateRange == null) {
+      return;
+    }
+
+    // Now it is safe to use the State's `context` again to show the next dialog.
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Manual Entry'),
-        content: TextField(controller: packsController, decoration: const InputDecoration(labelText: 'Number of Packs Smoked'), keyboardType: TextInputType.number),
+        content: TextField(
+            controller: packsController,
+            decoration:
+                const InputDecoration(labelText: 'Number of Packs Smoked'),
+            keyboardType: TextInputType.number),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel')),
           ElevatedButton(
             child: const Text('Log'),
             onPressed: () async {
               final packs = int.tryParse(packsController.text) ?? 0;
+
+              final navigator = Navigator.of(dialogContext);
+
               if (packs > 0) {
-                await _storageService.logManualEntry(dateRange, packs, _settings);
+                await dataProvider.logManualEntry(dateRange, packs);
               }
-              if (!context.mounted) return;
-              Navigator.of(context).pop();
-              _loadData();
+
+              navigator.pop();
             },
           ),
         ],

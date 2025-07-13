@@ -1,7 +1,10 @@
+// lib/screens/onboarding_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:smoked_1/models/user_settings.dart';
 import 'package:smoked_1/services/local_storage_service.dart';
 import 'package:smoked_1/screens/home_page.dart';
+import 'package:smoked_1/utils/constants.dart'; // IMPORTED: Constants
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -31,13 +34,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _saveAndContinue() async {
-    final newPrice = int.tryParse(_priceController.text) ?? 35000;
-    final newCigs = int.tryParse(_cigsController.text) ?? 16;
+    final newPrice =
+        int.tryParse(_priceController.text) ?? AppConstants.defaultPricePerPack;
+    final newCigs =
+        int.tryParse(_cigsController.text) ?? AppConstants.defaultCigsPerPack;
+
+    // Save the settings...
     await _storageService.saveSettings(UserSettings(
       pricePerPack: newPrice,
       cigsPerPack: newCigs,
       preferredCurrency: _selectedCurrency,
     ));
+
+    // ...and set the flag to indicate onboarding is complete.
+    await _storageService.setOnboarded();
+
     if (mounted) {
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (context) => const HomePage()),
@@ -77,7 +88,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     labelText: 'Currency',
                     border: OutlineInputBorder(),
                   ),
-                  items: _tempSettings.exchangeRates.keys.map((String currency) {
+                  items:
+                      _tempSettings.exchangeRates.keys.map((String currency) {
                     return DropdownMenuItem<String>(
                       value: currency,
                       child: Text(currency),

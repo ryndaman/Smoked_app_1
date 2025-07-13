@@ -1,16 +1,24 @@
-// --- Imports ---
+// lib/main.dart
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart'; // IMPORTED: Provider
+import 'package:smoked_1/providers/smoke_data_provider.dart'; // IMPORTED: Our new provider
 import 'package:smoked_1/screens/home_page.dart';
 import 'package:smoked_1/screens/onboarding_screen.dart';
 import 'package:smoked_1/screens/splash_screen.dart';
 import 'package:smoked_1/services/local_storage_service.dart';
 
-// --- Main Function ---
 void main() {
-  runApp(const SmokedApp());
+  runApp(
+    // Wrap the entire app in a ChangeNotifierProvider.
+    // This makes the SmokeDataProvider available to all widgets in the tree.
+    ChangeNotifierProvider(
+      create: (context) => SmokeDataProvider(),
+      child: const SmokedApp(),
+    ),
+  );
 }
 
-// --- Root App Widget ---
 class SmokedApp extends StatelessWidget {
   const SmokedApp({super.key});
 
@@ -47,7 +55,6 @@ class SmokedApp extends StatelessWidget {
   }
 }
 
-// --- App Initializer Widget ---
 class AppInitializer extends StatefulWidget {
   const AppInitializer({super.key});
 
@@ -67,14 +74,15 @@ class _AppInitializerState extends State<AppInitializer> {
   void _initializeApp() async {
     await Future.delayed(const Duration(milliseconds: 2200));
 
-    final settings = await _storageService.getSettings();
-    bool hasOnboarded = settings.pricePerPack != 35000;
+    // REFACTORED: Use the robust boolean flag for the check.
+    bool hasOnboarded = await _storageService.hasOnboarded();
 
     if (!mounted) return;
 
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (context) => hasOnboarded ? const HomePage() : const OnboardingScreen(),
+        builder: (context) =>
+            hasOnboarded ? const HomePage() : const OnboardingScreen(),
       ),
     );
   }
