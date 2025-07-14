@@ -132,7 +132,7 @@ class HourlyLineChart extends StatelessWidget {
         bottomTitles: AxisTitles(
           sideTitles: SideTitles(
             showTitles: true,
-            interval: 2, // Show a label every 4 hours (every 2 bins).
+            interval: 4, // Show a label every 4 hours (every 2 bins).
             getTitlesWidget: (value, meta) {
               final hour = value.toInt();
               if (hour % 2 != 0 && hour != 0) {
