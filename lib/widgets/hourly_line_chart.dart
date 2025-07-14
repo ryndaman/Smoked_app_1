@@ -1,6 +1,8 @@
-import 'dart:math';
+// lib/widgets/hourly_line_chart.dart
+
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
 import 'package:smoked_1/models/smoke_event.dart';
 
 class HourlyLineChart extends StatelessWidget {
@@ -10,45 +12,72 @@ class HourlyLineChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LineChart(
-      _buildChartData(context),
+    // The main widget is now a Column to include the chart and the explanation text.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: LineChart(
+            _buildChartData(context),
+          ),
+        ),
+        const SizedBox(height: 8),
+        // ADDED: Explanation text below the chart.
+        Text(
+          "*Chart shows the daily average number of cigarettes smoked per 2-hour block over the last 7 days.",
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 10,
+            color: Colors.grey[600],
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+      ],
     );
   }
 
+  // MODIFIED: This entire method is refactored to group data into 2-hour bins.
   LineChartData _buildChartData(BuildContext context) {
-    final Map<int, int> hourlyCounts = {};
+    // 1. Initialize a map to hold the TOTAL count for each 2-hour bin.
+    // There will be 12 bins, indexed 0 to 11.
+    final Map<int, int> twoHourBinTotals = {for (var i = 0; i < 12; i++) i: 0};
+
     final now = DateTime.now();
+    final sevenDaysAgo = now.subtract(const Duration(days: 7));
+    final recentEvents =
+        events.where((event) => event.timestamp.isAfter(sevenDaysAgo)).toList();
 
-    for (int i = 0; i < 24; i++) {
-      hourlyCounts[i] = 0;
+    // 2. Populate the 2-hour bin totals.
+    for (var event in recentEvents) {
+      // Determine the bin index (0-11) for the event's hour.
+      // e.g., hour 0 or 1 -> bin 0; hour 2 or 3 -> bin 1.
+      final int binIndex = event.timestamp.hour ~/ 2;
+      twoHourBinTotals[binIndex] = (twoHourBinTotals[binIndex] ?? 0) + 1;
     }
 
-    final todayEvents = events.where((event) {
-      return event.timestamp.year == now.year &&
-          event.timestamp.month == now.month &&
-          event.timestamp.day == now.day;
-    }).toList();
-
-    for (var event in todayEvents) {
-      hourlyCounts[event.timestamp.hour] =
-          (hourlyCounts[event.timestamp.hour] ?? 0) + 1;
-    }
-
-    final List<FlSpot> spots = hourlyCounts.entries.map((entry) {
-      return FlSpot(entry.key.toDouble(), entry.value.toDouble());
+    // 3. Create the spots for the chart with the AVERAGE value for each bin.
+    double maxAverage = 0;
+    final List<FlSpot> spots = twoHourBinTotals.entries.map((entry) {
+      final double average = entry.value / 7.0;
+      if (average > maxAverage) {
+        maxAverage = average;
+      }
+      // The x-value represents the start hour of the bin (0, 2, 4, ...).
+      return FlSpot((entry.key * 2).toDouble(), average);
     }).toList();
 
     return LineChartData(
       lineTouchData: LineTouchData(
         handleBuiltInTouches: true,
         touchTooltipData: LineTouchTooltipData(
-          getTooltipColor: (touchedSpot) => Theme.of(context).colorScheme.secondary,
+          getTooltipColor: (touchedSpot) =>
+              Theme.of(context).colorScheme.secondary,
           tooltipPadding: const EdgeInsets.all(8),
           tooltipMargin: 12,
           getTooltipItems: (touchedSpots) {
             return touchedSpots.map((spot) {
               return LineTooltipItem(
-                spot.y.toInt().toString(),
+                'Avg: ${spot.y.toStringAsFixed(1)}',
                 TextStyle(
                   color: Theme.of(context).colorScheme.onPrimary,
                   fontWeight: FontWeight.bold,
@@ -57,7 +86,8 @@ class HourlyLineChart extends StatelessWidget {
             }).toList();
           },
         ),
-        getTouchedSpotIndicator: (LineChartBarData barData, List<int> spotIndexes) {
+        getTouchedSpotIndicator:
+            (LineChartBarData barData, List<int> spotIndexes) {
           return spotIndexes.map((spotIndex) {
             return TouchedSpotIndicatorData(
               const FlLine(color: Colors.transparent),
@@ -79,34 +109,48 @@ class HourlyLineChart extends StatelessWidget {
       titlesData: FlTitlesData(
         show: true,
         topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        rightTitles:
+            const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        leftTitles: AxisTitles(
+          sideTitles: SideTitles(
+            showTitles: true,
+            interval: 1,
+            getTitlesWidget: (value, meta) {
+              if (value % 1 != 0) {
+                return Container();
+              }
+              return Text(
+                value.toInt().toString(),
+                style: const TextStyle(fontSize: 10),
+                textAlign: TextAlign.center,
+              );
+            },
+            reservedSize: 28,
+          ),
+        ),
+        // MODIFIED: Bottom titles now reflect the 2-hour bins.
         bottomTitles: AxisTitles(
           sideTitles: SideTitles(
             showTitles: true,
-            interval: 6,
+            interval: 2, // Show a label every 4 hours (every 2 bins).
             getTitlesWidget: (value, meta) {
-              String text;
-              switch (value.toInt()) {
-                case 0:
-                  text = '00';
-                  break;
-                case 6:
-                  text = '06';
-                  break;
-                case 12:
-                  text = '12';
-                  break;
-                case 18:
-                  text = '18';
-                  break;
-                default:
-                  return Container();
+              final hour = value.toInt();
+              if (hour % 2 != 0 && hour != 0) {
+                return Container();
               }
+              final time = DateTime(2023, 1, 1, hour);
+              final String timeText = DateFormat('ha').format(time);
+
               return SideTitleWidget(
                 meta: meta,
-                space: 4,
-                child: Text(text, style: const TextStyle(fontSize: 10)),
+                space: 4.0,
+                child: Text(
+                  timeText,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               );
             },
             reservedSize: 28,
@@ -115,9 +159,9 @@ class HourlyLineChart extends StatelessWidget {
       ),
       borderData: FlBorderData(show: false),
       minX: 0,
-      maxX: 23,
+      maxX: 22, // The last data point is at hour 22.
       minY: 0,
-      maxY: (hourlyCounts.values.isEmpty ? 5 : hourlyCounts.values.reduce(max).toDouble()) + 2,
+      maxY: maxAverage == 0 ? 5 : (maxAverage.ceil() + 1).toDouble(),
       lineBarsData: [
         LineChartBarData(
           spots: spots,
@@ -126,7 +170,10 @@ class HourlyLineChart extends StatelessWidget {
           barWidth: 3,
           isStrokeCapRound: true,
           dotData: const FlDotData(show: true),
-          belowBarData: BarAreaData(show: false),
+          belowBarData: BarAreaData(
+            show: true,
+            color: Theme.of(context).colorScheme.secondary.withAlpha(77),
+          ),
         ),
       ],
     );

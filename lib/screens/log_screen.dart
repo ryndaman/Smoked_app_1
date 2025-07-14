@@ -1,12 +1,15 @@
 // lib/screens/log_screen.dart
-import 'package:smoked_1/models/smoke_event.dart';
+
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:smoked_1/models/smoke_event.dart';
 import 'package:smoked_1/models/user_settings.dart';
 import 'package:smoked_1/providers/smoke_data_provider.dart';
+import 'package:smoked_1/providers/theme_provider.dart';
+import 'package:smoked_1/utils/app_themes.dart';
 
 class LogScreen extends StatefulWidget {
   const LogScreen({super.key});
@@ -18,7 +21,7 @@ class LogScreen extends StatefulWidget {
 class _LogScreenState extends State<LogScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
-  Timer? _buttonUpdateTimer; // Timer for the button
+  Timer? _buttonUpdateTimer;
 
   @override
   void initState() {
@@ -28,7 +31,6 @@ class _LogScreenState extends State<LogScreen>
       duration: const Duration(milliseconds: 400),
     );
 
-    //Start a timer that rebuilds the state every second to update the button gradient
     _buttonUpdateTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
         setState(() {});
@@ -43,7 +45,6 @@ class _LogScreenState extends State<LogScreen>
     super.dispose();
   }
 
-  //Logic to determine the button's gradient based on time
   Gradient _getButtonGradient(
       BuildContext context, SmokeDataProvider dataProvider) {
     final Color primaryColor = Theme.of(context).colorScheme.primary;
@@ -58,17 +59,15 @@ class _LogScreenState extends State<LogScreen>
         DateTime.now().difference(lastEvent.timestamp);
 
     const int periodInMinutes = 7;
-    const int fullCycleMinutes = periodInMinutes * 4; // 28 minutes total cycle
+    const int fullCycleMinutes = periodInMinutes * 4;
 
     if (timeSinceLastSmoke.inMinutes >= fullCycleMinutes) {
       return LinearGradient(colors: [primaryColor, primaryColor]);
     }
 
-    // Calculate the interpolation factor (0.0 = hot, 1.0 = normal)
     double t = timeSinceLastSmoke.inMinutes / fullCycleMinutes;
-    t = t.clamp(0.0, 1.0); // Ensure t is between 0 and 1
+    t = t.clamp(0.0, 1.0);
 
-    // Use lerp to smoothly transition from hotColor to primaryColor
     final Color interpolatedColor = Color.lerp(hotColor, primaryColor, t)!;
 
     return LinearGradient(
@@ -81,7 +80,6 @@ class _LogScreenState extends State<LogScreen>
     );
   }
 
-  //Logic of a count-up timer 'since your last smoke'
   Widget _getButtonChild(SmokeDataProvider dataProvider) {
     if (dataProvider.events.isEmpty) {
       return const Text(
@@ -99,7 +97,21 @@ class _LogScreenState extends State<LogScreen>
     final Duration timeSinceLastSmoke =
         DateTime.now().difference(lastEvent.timestamp);
 
-    // Format the duration into HH:MM:SS
+    const int periodInMinutes = 7;
+    const int fullCycleMinutes = periodInMinutes * 4;
+
+    if (timeSinceLastSmoke.inMinutes >= fullCycleMinutes) {
+      return const Text(
+        "I Smoked\nOne",
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 24,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
+      );
+    }
+
     String twoDigits(int n) => n.toString().padLeft(2, '0');
     final hours = twoDigits(timeSinceLastSmoke.inHours);
     final minutes = twoDigits(timeSinceLastSmoke.inMinutes.remainder(60));
@@ -154,14 +166,12 @@ class _LogScreenState extends State<LogScreen>
             actions: [
               IconButton(
                 icon: const Icon(Icons.settings),
-                // FIXED: Call the method without passing the context.
                 onPressed: () => _showSettingsDialog(dataProvider),
               ),
               Tooltip(
                 message: 'Log Missed Packs',
                 child: IconButton(
                   icon: const Icon(Icons.edit_calendar_outlined),
-                  // FIXED: Call the method without passing the context.
                   onPressed: () => _showManualEntryDialog(dataProvider),
                 ),
               ),
@@ -250,16 +260,15 @@ class _LogScreenState extends State<LogScreen>
     );
   }
 
-  // FIXED: Method no longer takes BuildContext as a parameter.
   void _showSettingsDialog(SmokeDataProvider dataProvider) {
     final priceController = TextEditingController(
         text: dataProvider.settings.pricePerPack.toString());
     final cigsController = TextEditingController(
         text: dataProvider.settings.cigsPerPack.toString());
     String selectedCurrency = dataProvider.settings.preferredCurrency;
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
 
     showDialog(
-      // It uses the State's own `context` property.
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) {
@@ -268,7 +277,50 @@ class _LogScreenState extends State<LogScreen>
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ADDED: Theme selection in settings
+                  Text(
+                    "App Theme",
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _ThemeSelectionChip(
+                        theme: AppTheme.original,
+                        label: "Original",
+                        isSelected:
+                            themeProvider.currentTheme == AppTheme.original,
+                        onTap: () {
+                          themeProvider.setTheme(AppTheme.original);
+                          setDialogState(() {});
+                        },
+                      ),
+                      _ThemeSelectionChip(
+                        theme: AppTheme.lightMonochrome,
+                        label: "Mono",
+                        isSelected: themeProvider.currentTheme ==
+                            AppTheme.lightMonochrome,
+                        onTap: () {
+                          themeProvider.setTheme(AppTheme.lightMonochrome);
+                          setDialogState(() {});
+                        },
+                      ),
+                      _ThemeSelectionChip(
+                        theme: AppTheme.darkNeon,
+                        label: "Neon",
+                        isSelected:
+                            themeProvider.currentTheme == AppTheme.darkNeon,
+                        onTap: () {
+                          themeProvider.setTheme(AppTheme.darkNeon);
+                          setDialogState(() {});
+                        },
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 32),
                   DropdownButtonFormField<String>(
                     value: selectedCurrency,
                     decoration: const InputDecoration(labelText: 'Currency'),
@@ -326,16 +378,13 @@ class _LogScreenState extends State<LogScreen>
     );
   }
 
-  // FIXED: Method no longer takes BuildContext as a parameter.
   void _showManualEntryDialog(SmokeDataProvider dataProvider) async {
-    // The await call happens here. It uses the State's own `context`.
     final dateRange = await showDateRangePicker(
       context: context,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
     );
 
-    // This is the definitive pattern: check `mounted` right after an `await`.
     if (!mounted || dateRange == null) {
       return;
     }
@@ -372,6 +421,65 @@ class _LogScreenState extends State<LogScreen>
               navigator.pop();
             },
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// Helper widget for theme selection chips, copied from onboarding screen
+class _ThemeSelectionChip extends StatelessWidget {
+  final AppTheme theme;
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _ThemeSelectionChip({
+    required this.theme,
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    ThemeData themeData;
+    switch (theme) {
+      case AppTheme.lightMonochrome:
+        themeData = AppThemes.lightMonochrome;
+        break;
+      case AppTheme.darkNeon:
+        themeData = AppThemes.darkNeon;
+        break;
+      default:
+        themeData = AppThemes.original;
+    }
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: isSelected
+                  ? Border.all(
+                      color: Theme.of(context).colorScheme.primary, width: 3)
+                  : null,
+              gradient: LinearGradient(
+                colors: [
+                  themeData.colorScheme.primary,
+                  themeData.scaffoldBackgroundColor,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(label),
         ],
       ),
     );
