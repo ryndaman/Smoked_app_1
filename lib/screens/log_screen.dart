@@ -1,5 +1,6 @@
 // lib/screens/log_screen.dart
-
+import 'package:smoked_1/models/smoke_event.dart';
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -17,6 +18,7 @@ class LogScreen extends StatefulWidget {
 class _LogScreenState extends State<LogScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
+  Timer? _buttonUpdateTimer; // Timer for the button
 
   @override
   void initState() {
@@ -25,12 +27,107 @@ class _LogScreenState extends State<LogScreen>
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
+
+    //Start a timer that rebuilds the state every second to update the button gradient
+    _buttonUpdateTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   @override
   void dispose() {
     _animationController.dispose();
+    _buttonUpdateTimer?.cancel();
     super.dispose();
+  }
+
+  //Logic to determine the button's gradient based on time
+  Gradient _getButtonGradient(
+      BuildContext context, SmokeDataProvider dataProvider) {
+    final Color primaryColor = Theme.of(context).colorScheme.primary;
+    final Color hotColor = Colors.red.shade800;
+
+    if (dataProvider.events.isEmpty) {
+      return LinearGradient(colors: [primaryColor, primaryColor]);
+    }
+
+    final SmokeEvent lastEvent = dataProvider.events.last;
+    final Duration timeSinceLastSmoke =
+        DateTime.now().difference(lastEvent.timestamp);
+
+    const int periodInMinutes = 7;
+    const int fullCycleMinutes = periodInMinutes * 4; // 28 minutes total cycle
+
+    if (timeSinceLastSmoke.inMinutes >= fullCycleMinutes) {
+      return LinearGradient(colors: [primaryColor, primaryColor]);
+    }
+
+    // Calculate the interpolation factor (0.0 = hot, 1.0 = normal)
+    double t = timeSinceLastSmoke.inMinutes / fullCycleMinutes;
+    t = t.clamp(0.0, 1.0); // Ensure t is between 0 and 1
+
+    // Use lerp to smoothly transition from hotColor to primaryColor
+    final Color interpolatedColor = Color.lerp(hotColor, primaryColor, t)!;
+
+    return LinearGradient(
+      colors: [
+        interpolatedColor,
+        Color.lerp(interpolatedColor, Colors.black, 0.2)!
+      ],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    );
+  }
+
+  //Logic of a count-up timer 'since your last smoke'
+  Widget _getButtonChild(SmokeDataProvider dataProvider) {
+    if (dataProvider.events.isEmpty) {
+      return const Text(
+        "I Smoked\nOne",
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 24,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
+      );
+    }
+
+    final SmokeEvent lastEvent = dataProvider.events.last;
+    final Duration timeSinceLastSmoke =
+        DateTime.now().difference(lastEvent.timestamp);
+
+    // Format the duration into HH:MM:SS
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final hours = twoDigits(timeSinceLastSmoke.inHours);
+    final minutes = twoDigits(timeSinceLastSmoke.inMinutes.remainder(60));
+    final seconds = twoDigits(timeSinceLastSmoke.inSeconds.remainder(60));
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          "$hours:$minutes:$seconds",
+          style: const TextStyle(
+            fontSize: 32,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            fontFamily: 'monospace',
+          ),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          "since last smoke",
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w300,
+            color: Colors.white,
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -115,24 +212,32 @@ class _LogScreenState extends State<LogScreen>
                       ),
                     ),
                     const SizedBox(height: 48),
-                    ElevatedButton(
-                      onPressed: () async {
-                        _animationController.forward(from: 0.0);
-                        await dataProvider.logSmokeEvent();
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        foregroundColor: Colors.white,
-                        shape: const CircleBorder(),
-                        padding: const EdgeInsets.all(60),
-                        elevation: 8,
-                        shadowColor: const Color.fromRGBO(0, 0, 0, 0.4),
+                    AnimatedContainer(
+                      duration: const Duration(seconds: 1),
+                      decoration: BoxDecoration(
+                        gradient: _getButtonGradient(context, dataProvider),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withAlpha(102),
+                            spreadRadius: 2,
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                      child: const Text(
-                        "I Smoked\nOne",
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            fontSize: 24, fontWeight: FontWeight.bold),
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          _animationController.forward(from: 0.0);
+                          await dataProvider.logSmokeEvent();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          shape: const CircleBorder(),
+                          padding: const EdgeInsets.all(60),
+                        ),
+                        child: _getButtonChild(dataProvider),
                       ),
                     ),
                   ],
@@ -223,8 +328,6 @@ class _LogScreenState extends State<LogScreen>
 
   // FIXED: Method no longer takes BuildContext as a parameter.
   void _showManualEntryDialog(SmokeDataProvider dataProvider) async {
-    final packsController = TextEditingController();
-
     // The await call happens here. It uses the State's own `context`.
     final dateRange = await showDateRangePicker(
       context: context,
@@ -237,7 +340,12 @@ class _LogScreenState extends State<LogScreen>
       return;
     }
 
-    // Now it is safe to use the State's `context` again to show the next dialog.
+    _showPacksDialog(dataProvider, dateRange);
+  }
+
+  void _showPacksDialog(
+      SmokeDataProvider dataProvider, DateTimeRange dateRange) {
+    final packsController = TextEditingController();
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -255,7 +363,6 @@ class _LogScreenState extends State<LogScreen>
             child: const Text('Log'),
             onPressed: () async {
               final packs = int.tryParse(packsController.text) ?? 0;
-
               final navigator = Navigator.of(dialogContext);
 
               if (packs > 0) {
