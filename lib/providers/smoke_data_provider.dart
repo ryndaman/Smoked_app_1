@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smoked_1/data/health_data.dart';
 import 'package:smoked_1/models/equivalent_item.dart';
 import 'package:smoked_1/models/health_milestone.dart';
+import 'package:smoked_1/models/resisted_event.dart';
 import 'package:smoked_1/models/smoke_event.dart';
 import 'package:smoked_1/models/user_settings.dart';
 import 'package:smoked_1/services/local_storage_service.dart';
@@ -20,26 +21,25 @@ class SmokeDataProvider with ChangeNotifier {
   bool _isLoading = true;
   late UserSettings _settings;
   late List<SmokeEvent> _events;
+  late List<ResistedEvent> _resistedEvents = [];
   late List<EquivalentItem> _equivalents;
   late List<HealthMilestone> _healthMilestones;
 
-  double _totalMoneySaved =
-      0.0; // This remains for the real-time "All-Time" value
+  double _totalMoneySaved = 0.0;
   Map<int, double> _baselineHourlyMap = {};
   String? dataLoadingError;
 
-  // ADDED: New properties to hold time-based metrics
   Map<String, double> moneySpentByPeriod = {};
-  Map<String, double> moneySavedByPeriod = {}; // ADDED
+  Map<String, double> moneySavedByPeriod = {};
   Map<String, int> sticksAvertedByPeriod = {};
 
-  // This will hold the value loaded from storage, to be used by the timer.
   double _moneySavedSinceLastCalculation = 0.0;
 
   // --- Getters ---
   bool get isLoading => _isLoading;
   UserSettings get settings => _settings;
   List<SmokeEvent> get events => _events;
+  List<ResistedEvent> get resistedEvents => _resistedEvents;
   List<EquivalentItem> get equivalents => _equivalents;
   List<HealthMilestone> get healthMilestones => _healthMilestones;
   double get totalMoneySaved => _totalMoneySaved;
@@ -69,14 +69,16 @@ class SmokeDataProvider with ChangeNotifier {
       final results = await Future.wait([
         _storageService.getSettings(),
         _storageService.getSmokeEvents(),
+        _storageService.getResistedEvents(),
         _loadEquivalentsFromCsv(),
         _loadMoneySaved(),
       ]);
 
       _settings = results[0] as UserSettings;
       _events = results[1] as List<SmokeEvent>;
-      _equivalents = results[2] as List<EquivalentItem>;
-      _moneySavedSinceLastCalculation = results[3] as double;
+      _resistedEvents = results[2] as List<ResistedEvent>;
+      _equivalents = results[3] as List<EquivalentItem>;
+      _moneySavedSinceLastCalculation = results[4] as double;
       _totalMoneySaved = _moneySavedSinceLastCalculation;
 
       _healthMilestones = HealthData.milestones;
@@ -108,6 +110,13 @@ class SmokeDataProvider with ChangeNotifier {
     await _storageService.saveEvents(_events);
     await _saveMoneySaved();
     _calculateAllMetrics();
+    notifyListeners();
+  }
+
+  Future<void> logResistedEvent() async {
+    final newEvent = ResistedEvent(timestamp: DateTime.now());
+    _resistedEvents.add(newEvent);
+    await _storageService.saveResistedEvents(_resistedEvents);
     notifyListeners();
   }
 
@@ -171,7 +180,6 @@ class SmokeDataProvider with ChangeNotifier {
       final avertedSticks = baselineSticksInPeriod - eventsInPeriod.length;
       sticksAvertedByPeriod[key] = avertedSticks > 0 ? avertedSticks : 0;
 
-      // ADDED: Calculate money saved for the specific period
       final baselineCostInPeriod = baselineSticksInPeriod * pricePerStick;
       final savedInPeriod = baselineCostInPeriod - costInPeriod;
       moneySavedByPeriod[key] = savedInPeriod > 0 ? savedInPeriod : 0;
@@ -179,8 +187,7 @@ class SmokeDataProvider with ChangeNotifier {
 
     final allTimeCost = _events.length * pricePerStick;
     moneySpentByPeriod['All-Time'] = allTimeCost;
-    moneySavedByPeriod['All-Time'] =
-        _totalMoneySaved; // Use the real-time value for all-time
+    moneySavedByPeriod['All-Time'] = _totalMoneySaved;
 
     if (_events.isNotEmpty) {
       final daysSinceStart = now.difference(_events.first.timestamp).inDays + 1;
@@ -247,7 +254,6 @@ class SmokeDataProvider with ChangeNotifier {
       allWakingHours.addAll(lateNightHours);
     }
 
-    // Ensure high traffic hours are within the waking hours
     highTrafficHours = highTrafficHours.intersection(allWakingHours);
 
     final otherWakingHours = allWakingHours.difference(highTrafficHours);

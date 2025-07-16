@@ -8,8 +8,9 @@ import 'package:smoked_1/models/user_settings.dart';
 import 'package:smoked_1/providers/smoke_data_provider.dart';
 import 'package:smoked_1/providers/theme_provider.dart';
 import 'package:smoked_1/utils/app_themes.dart';
-import 'package:smoked_1/widgets/financial_info_widget.dart'; // ADDED
-import 'package:smoked_1/widgets/main_log_button.dart'; // ADDED
+import 'package:smoked_1/widgets/financial_info_widget.dart';
+import 'package:smoked_1/widgets/action_button_carousel.dart';
+import 'package:smoked_1/widgets/since_last_smoke_timer.dart'; // ADDED
 
 class LogScreen extends StatefulWidget {
   const LogScreen({super.key});
@@ -19,13 +20,12 @@ class LogScreen extends StatefulWidget {
 }
 
 class _LogScreenState extends State<LogScreen> {
-  // The animation controller is removed from here as it's now managed inside MainLogButton
   Timer? _buttonUpdateTimer;
 
   @override
   void initState() {
     super.initState();
-    // The timer is still needed here to trigger rebuilds for the financial info
+    // This timer is still needed to trigger rebuilds for the timer widget
     _buttonUpdateTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
         setState(() {});
@@ -38,8 +38,6 @@ class _LogScreenState extends State<LogScreen> {
     _buttonUpdateTimer?.cancel();
     super.dispose();
   }
-
-  // All builder methods and helpers for the button have been moved to their own files.
 
   @override
   Widget build(BuildContext context) {
@@ -75,14 +73,16 @@ class _LogScreenState extends State<LogScreen> {
           body: SingleChildScrollView(
             child: Center(
               child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                // MODIFIED: The main column is now much cleaner
+                padding: const EdgeInsets.all(12.0), // Adjusted padding
+                // MODIFIED: The main column now includes the new timer widget in the correct order
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    FinancialInfo(formatter: formatter), // Using the new widget
-                    const SizedBox(height: 32),
-                    const MainLogButton(), // Using the new widget
+                    FinancialInfo(formatter: formatter),
+                    const SizedBox(height: 12),
+                    const SinceLastSmokeTimer(), // ADDED: The new timer widget
+                    const SizedBox(height: 12),
+                    const ActionButtonCarousel(),
                   ],
                 ),
               ),

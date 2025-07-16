@@ -57,7 +57,7 @@ class _FinancialInfoState extends State<FinancialInfo> {
                             .onSurface, // Use a readable color on the frame
                       ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 6),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,9 +73,9 @@ class _FinancialInfoState extends State<FinancialInfo> {
                                       .bodyLarge
                                       ?.color,
                                   fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 4),
                           SizedBox(
-                            height: 100, // Fixed height for the PageView
+                            height: 80, // Fixed height for the PageView
                             child: PageView.builder(
                               controller: _savedPageController,
                               itemCount:
@@ -121,9 +121,9 @@ class _FinancialInfoState extends State<FinancialInfo> {
                                       .bodyLarge
                                       ?.color,
                                   fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 4),
                           SizedBox(
-                            height: 100, // Fixed height for the PageView
+                            height: 80, // Fixed height for the PageView
                             child: PageView.builder(
                               controller: _spentPageController,
                               itemCount:

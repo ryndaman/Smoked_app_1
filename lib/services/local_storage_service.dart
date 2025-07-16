@@ -4,14 +4,13 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:smoked_1/models/resisted_event.dart';
 import 'package:smoked_1/models/smoke_event.dart';
 import 'package:smoked_1/models/user_settings.dart';
-import 'package:smoked_1/utils/constants.dart'; // IMPORTED: Centralized constants
+import 'package:smoked_1/utils/constants.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:csv/csv.dart';
 
-// This class now ONLY handles direct communication with SharedPreferences.
-// The business logic has been moved to the SmokeDataProvider.
 class LocalStorageService {
   // --- Settings Methods ---
   Future<void> saveSettings(UserSettings settings) async {
@@ -26,7 +25,6 @@ class LocalStorageService {
     if (settingsString != null) {
       return UserSettings.fromJson(jsonDecode(settingsString));
     }
-    // Return default settings if none are found.
     return UserSettings();
   }
 
@@ -57,7 +55,23 @@ class LocalStorageService {
     await prefs.setStringList(AppConstants.eventsKey, eventsStringList);
   }
 
-  // This logic remains here as it's a specific action that modifies data.
+  // --- Resisted Event Methods ---
+  Future<List<ResistedEvent>> getResistedEvents() async {
+    final prefs = await SharedPreferences.getInstance();
+    final eventsStringList =
+        prefs.getStringList(AppConstants.resistedEventsKey) ?? [];
+    return eventsStringList
+        .map((str) => ResistedEvent.fromJson(jsonDecode(str)))
+        .toList();
+  }
+
+  Future<void> saveResistedEvents(List<ResistedEvent> events) async {
+    final prefs = await SharedPreferences.getInstance();
+    final eventsStringList =
+        events.map((event) => jsonEncode(event.toJson())).toList();
+    await prefs.setStringList(AppConstants.resistedEventsKey, eventsStringList);
+  }
+
   Future<void> logManualEntry(
       DateTimeRange range, int packs, UserSettings settings) async {
     if (settings.cigsPerPack <= 0 || packs <= 0) return;
