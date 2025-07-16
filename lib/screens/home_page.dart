@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:smoked_1/screens/log_screen.dart';
 import 'package:smoked_1/screens/summary_screen.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:smoked_1/screens/health_screen.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -14,6 +16,7 @@ class _HomePageState extends State<HomePage> {
   static final List<Widget> _widgetOptions = <Widget>[
     const LogScreen(),
     const SummaryScreen(),
+    const HealthScreen(),
   ];
 
   void _onItemTapped(int index) {
@@ -40,6 +43,10 @@ class _HomePageState extends State<HomePage> {
             icon: Icon(Icons.bar_chart),
             label: 'Summary',
           ),
+          BottomNavigationBarItem(
+            icon: FaIcon(FontAwesomeIcons.heartPulse),
+            label: 'Health',
+          )
         ],
       ),
     );

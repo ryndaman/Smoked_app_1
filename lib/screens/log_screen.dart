@@ -1,15 +1,15 @@
 // lib/screens/log_screen.dart
 
 import 'dart:async';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:smoked_1/models/smoke_event.dart';
 import 'package:smoked_1/models/user_settings.dart';
 import 'package:smoked_1/providers/smoke_data_provider.dart';
 import 'package:smoked_1/providers/theme_provider.dart';
 import 'package:smoked_1/utils/app_themes.dart';
+import 'package:smoked_1/widgets/financial_info_widget.dart'; // ADDED
+import 'package:smoked_1/widgets/main_log_button.dart'; // ADDED
 
 class LogScreen extends StatefulWidget {
   const LogScreen({super.key});
@@ -18,19 +18,14 @@ class LogScreen extends StatefulWidget {
   State<LogScreen> createState() => _LogScreenState();
 }
 
-class _LogScreenState extends State<LogScreen>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _animationController;
+class _LogScreenState extends State<LogScreen> {
+  // The animation controller is removed from here as it's now managed inside MainLogButton
   Timer? _buttonUpdateTimer;
 
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 400),
-    );
-
+    // The timer is still needed here to trigger rebuilds for the financial info
     _buttonUpdateTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
         setState(() {});
@@ -40,107 +35,11 @@ class _LogScreenState extends State<LogScreen>
 
   @override
   void dispose() {
-    _animationController.dispose();
     _buttonUpdateTimer?.cancel();
     super.dispose();
   }
 
-  Gradient _getButtonGradient(
-      BuildContext context, SmokeDataProvider dataProvider) {
-    final Color primaryColor = Theme.of(context).colorScheme.primary;
-    final Color hotColor = Colors.red.shade800;
-
-    if (dataProvider.events.isEmpty) {
-      return LinearGradient(colors: [primaryColor, primaryColor]);
-    }
-
-    final SmokeEvent lastEvent = dataProvider.events.last;
-    final Duration timeSinceLastSmoke =
-        DateTime.now().difference(lastEvent.timestamp);
-
-    const int periodInMinutes = 7;
-    const int fullCycleMinutes = periodInMinutes * 4;
-
-    if (timeSinceLastSmoke.inMinutes >= fullCycleMinutes) {
-      return LinearGradient(colors: [primaryColor, primaryColor]);
-    }
-
-    double t = timeSinceLastSmoke.inMinutes / fullCycleMinutes;
-    t = t.clamp(0.0, 1.0);
-
-    final Color interpolatedColor = Color.lerp(hotColor, primaryColor, t)!;
-
-    return LinearGradient(
-      colors: [
-        interpolatedColor,
-        Color.lerp(interpolatedColor, Colors.black, 0.2)!
-      ],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-    );
-  }
-
-  Widget _getButtonChild(SmokeDataProvider dataProvider) {
-    if (dataProvider.events.isEmpty) {
-      return const Text(
-        "I Smoked\nOne",
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
-        ),
-      );
-    }
-
-    final SmokeEvent lastEvent = dataProvider.events.last;
-    final Duration timeSinceLastSmoke =
-        DateTime.now().difference(lastEvent.timestamp);
-
-    const int periodInMinutes = 7;
-    const int fullCycleMinutes = periodInMinutes * 4;
-
-    if (timeSinceLastSmoke.inMinutes >= fullCycleMinutes) {
-      return const Text(
-        "I Smoked\nOne",
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
-        ),
-      );
-    }
-
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-    final hours = twoDigits(timeSinceLastSmoke.inHours);
-    final minutes = twoDigits(timeSinceLastSmoke.inMinutes.remainder(60));
-    final seconds = twoDigits(timeSinceLastSmoke.inSeconds.remainder(60));
-
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          "$hours:$minutes:$seconds",
-          style: const TextStyle(
-            fontSize: 32,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            fontFamily: 'monospace',
-          ),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          "since last smoke",
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w300,
-            color: Colors.white,
-          ),
-        ),
-      ],
-    );
-  }
+  // All builder methods and helpers for the button have been moved to their own files.
 
   @override
   Widget build(BuildContext context) {
@@ -150,10 +49,6 @@ class _LogScreenState extends State<LogScreen>
           return const Center(child: CircularProgressIndicator());
         }
 
-        final rate = dataProvider.settings
-                .exchangeRates[dataProvider.settings.preferredCurrency] ??
-            1.0;
-        final displayCost = dataProvider.totalCostInBase * rate;
         final formatter = NumberFormat.currency(
           locale: 'id_ID',
           symbol: '${dataProvider.settings.preferredCurrency} ',
@@ -181,75 +76,13 @@ class _LogScreenState extends State<LogScreen>
             child: Center(
               child: Padding(
                 padding: const EdgeInsets.all(24.0),
+                // MODIFIED: The main column is now much cleaner
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
-                      "Total Money Turned to Smoke",
-                      style: TextStyle(
-                        fontSize: 22,
-                        color: Theme.of(context).colorScheme.secondary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    AnimatedBuilder(
-                      animation: _animationController,
-                      builder: (context, child) {
-                        final sineValue =
-                            sin(4 * pi * _animationController.value);
-                        return Transform.translate(
-                          offset: Offset(sineValue * 15, 0),
-                          child: child,
-                        );
-                      },
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          formatter.format(displayCost),
-                          style: TextStyle(
-                            fontSize: 60,
-                            fontWeight: FontWeight.w900,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                      ),
-                    ),
-                    Text(
-                      "from ${dataProvider.totalSticks} sticks",
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                    const SizedBox(height: 48),
-                    AnimatedContainer(
-                      duration: const Duration(seconds: 1),
-                      decoration: BoxDecoration(
-                        gradient: _getButtonGradient(context, dataProvider),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withAlpha(102),
-                            spreadRadius: 2,
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          _animationController.forward(from: 0.0);
-                          await dataProvider.logSmokeEvent();
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
-                          shape: const CircleBorder(),
-                          padding: const EdgeInsets.all(60),
-                        ),
-                        child: _getButtonChild(dataProvider),
-                      ),
-                    ),
+                    FinancialInfo(formatter: formatter), // Using the new widget
+                    const SizedBox(height: 32),
+                    const MainLogButton(), // Using the new widget
                   ],
                 ),
               ),
@@ -265,6 +98,8 @@ class _LogScreenState extends State<LogScreen>
         text: dataProvider.settings.pricePerPack.toString());
     final cigsController = TextEditingController(
         text: dataProvider.settings.cigsPerPack.toString());
+    final baselineCigsController = TextEditingController(
+        text: dataProvider.settings.baselineCigsPerDay.toString());
     String selectedCurrency = dataProvider.settings.preferredCurrency;
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
 
@@ -279,7 +114,6 @@ class _LogScreenState extends State<LogScreen>
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ADDED: Theme selection in settings
                   Text(
                     "App Theme",
                     style: Theme.of(context).textTheme.titleMedium,
@@ -339,6 +173,11 @@ class _LogScreenState extends State<LogScreen>
                   ),
                   const SizedBox(height: 16),
                   TextField(
+                      controller: baselineCigsController,
+                      decoration: const InputDecoration(
+                          labelText: 'Avg. Cigarettes Per Day (Baseline)'),
+                      keyboardType: TextInputType.number),
+                  TextField(
                       controller: priceController,
                       decoration: InputDecoration(
                           labelText: 'Price per Pack ($selectedCurrency)'),
@@ -359,6 +198,9 @@ class _LogScreenState extends State<LogScreen>
                       dataProvider.settings.pricePerPack;
                   final newCigs = int.tryParse(cigsController.text) ??
                       dataProvider.settings.cigsPerPack;
+                  final newBaseline =
+                      int.tryParse(baselineCigsController.text) ??
+                          dataProvider.settings.baselineCigsPerDay;
 
                   final navigator = Navigator.of(dialogContext);
 
@@ -366,6 +208,8 @@ class _LogScreenState extends State<LogScreen>
                     pricePerPack: newPrice,
                     cigsPerPack: newCigs,
                     preferredCurrency: selectedCurrency,
+                    baselineCigsPerDay: newBaseline,
+                    smokingTimes: dataProvider.settings.smokingTimes,
                   ));
 
                   navigator.pop();
@@ -427,7 +271,6 @@ class _LogScreenState extends State<LogScreen>
   }
 }
 
-// Helper widget for theme selection chips, copied from onboarding screen
 class _ThemeSelectionChip extends StatelessWidget {
   final AppTheme theme;
   final String label;

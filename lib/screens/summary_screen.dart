@@ -90,8 +90,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
 
         final settings = dataProvider.settings;
         final rate = settings.exchangeRates[settings.preferredCurrency] ?? 1.0;
-        final totalCostInPreferredCurrency =
-            dataProvider.totalCostInBase * rate;
+
+        final totalCostInBase =
+            dataProvider.moneySpentByPeriod['All-Time'] ?? 0.0;
+        final totalCostInPreferredCurrency = totalCostInBase * rate;
 
         EquivalentItem equivalentItem = const EquivalentItem(
             name: 'small stones...', price: 0, iconIdentifier: 'stone');
@@ -252,7 +254,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
                 child: _selectedChart[0]
                     ? DailyLineChart(events: dataProvider.events)
-                    : HourlyLineChart(events: dataProvider.events),
+                    : const HourlyLineChart(),
               ),
               const SizedBox(height: 16),
 
