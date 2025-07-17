@@ -1,8 +1,10 @@
 // lib/screens/log_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:smoked_1/models/achievement.dart';
 import 'package:smoked_1/models/user_settings.dart';
 import 'package:smoked_1/providers/smoke_data_provider.dart';
 import 'package:smoked_1/providers/theme_provider.dart';
@@ -19,8 +21,21 @@ class LogScreen extends StatefulWidget {
 }
 
 class _LogScreenState extends State<LogScreen> {
-  // REMOVED: The redundant timer is no longer needed here.
-  // The SinceLastSmokeTimer widget now manages its own state and timer.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final dataProvider = Provider.of<SmokeDataProvider>(context);
+
+    if (dataProvider.newlyUnlockedAchievements.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showAchievementDialog(
+              context, dataProvider.newlyUnlockedAchievements);
+          dataProvider.clearNewlyUnlockedAchievements();
+        }
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,6 +85,44 @@ class _LogScreenState extends State<LogScreen> {
               ),
             ),
           ),
+        );
+      },
+    );
+  }
+
+  // --- Dialogs ---
+
+  void _showAchievementDialog(
+      BuildContext context, List<Achievement> achievements) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(achievements.length > 1
+              ? "Achievements Unlocked!"
+              : "Achievement Unlocked!"),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: achievements
+                  .map((ach) => ListTile(
+                        leading: FaIcon(
+                            _getIconForIdentifier(ach.iconIdentifier),
+                            color: Theme.of(context).colorScheme.primary),
+                        title: Text(ach.title,
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text(ach.description),
+                      ))
+                  .toList(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text("Awesome!"),
+            ),
+          ],
         );
       },
     );
@@ -251,8 +304,35 @@ class _LogScreenState extends State<LogScreen> {
       ),
     );
   }
+
+  IconData _getIconForIdentifier(String identifier) {
+    switch (identifier) {
+      case 'hourglass.start':
+        return FontAwesomeIcons.hourglassStart;
+      case 'calendar.week':
+        return FontAwesomeIcons.calendarWeek;
+      case 'shoe.prints':
+        return FontAwesomeIcons.shoePrints;
+      case 'list.ol':
+        return FontAwesomeIcons.listOl;
+      case 'mug.saucer':
+        return FontAwesomeIcons.mugSaucer;
+      case 'gamepad':
+        return FontAwesomeIcons.gamepad;
+      case 'sun':
+        return FontAwesomeIcons.sun;
+      case 'calendar.check':
+        return FontAwesomeIcons.calendarCheck;
+      case 'piggy.bank':
+        return FontAwesomeIcons.piggyBank;
+      default:
+        // FIXED: Corrected deprecated icon name
+        return FontAwesomeIcons.circleQuestion;
+    }
+  }
 }
 
+// FIXED: Re-added the _ThemeSelectionChip private widget
 class _ThemeSelectionChip extends StatelessWidget {
   final AppTheme theme;
   final String label;

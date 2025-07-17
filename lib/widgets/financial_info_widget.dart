@@ -36,7 +36,7 @@ class _FinancialInfoState extends State<FinancialInfo> {
                 .exchangeRates[dataProvider.settings.preferredCurrency] ??
             1.0;
 
-        // Data maps for the PageView builders
+        // FIXED: Data maps now point to the new, correct state variables
         final savedAmounts = {
           'Today': dataProvider.dailySavings,
           'This Week': dataProvider.weeklyNetSavings,

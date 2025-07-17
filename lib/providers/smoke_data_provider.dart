@@ -5,17 +5,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:csv/csv.dart';
 import 'package:smoked_1/data/health_data.dart';
+import 'package:smoked_1/models/achievement.dart';
 import 'package:smoked_1/models/equivalent_item.dart';
 import 'package:smoked_1/models/health_milestone.dart';
 import 'package:smoked_1/models/resisted_event.dart';
 import 'package:smoked_1/models/smoke_event.dart';
 import 'package:smoked_1/models/user_settings.dart';
+import 'package:smoked_1/services/achievement_service.dart';
 import 'package:smoked_1/services/local_storage_service.dart';
 import 'package:smoked_1/services/savings_service.dart';
 
 class SmokeDataProvider with ChangeNotifier {
   final LocalStorageService _storageService = LocalStorageService();
   final SavingsService _savingsService = SavingsService();
+  final AchievementService _achievementService = AchievementService();
   Timer? _mainTimer;
 
   // --- State Properties ---
@@ -35,7 +38,11 @@ class SmokeDataProvider with ChangeNotifier {
   int weeklyAvertedSticks = 0;
   int monthlyAvertedSticks = 0;
   late DateTime _lastRolloverTimestamp;
-  Map<int, double> _baselineHourlyMap = {}; // This remains private
+  Map<int, double> _baselineHourlyMap = {};
+
+  // --- Achievement State ---
+  Set<String> unlockedAchievementIds = {};
+  List<Achievement> newlyUnlockedAchievements = [];
 
   // --- Getters ---
   bool get isLoading => _isLoading;
@@ -43,12 +50,11 @@ class SmokeDataProvider with ChangeNotifier {
   List<SmokeEvent> get events => _events;
   List<ResistedEvent> get resistedEvents => _resistedEvents;
   List<EquivalentItem> get equivalents => _equivalents;
-  List<HealthMilestone> get healthMilestones => _healthMilestones;
   int get totalSticks => _events.length;
-  // ADDED: Public getter for the hourly map to fix UI error.
   Map<int, double> get baselineHourlyMap => _baselineHourlyMap;
+  List<HealthMilestone> get healthMilestones => _healthMilestones;
 
-  // --- Constructor ---
+  // --- Constructor & Dispose ---
   SmokeDataProvider() {
     loadInitialData();
   }
@@ -59,7 +65,7 @@ class SmokeDataProvider with ChangeNotifier {
     super.dispose();
   }
 
-  // --- Data Loading and Manipulation ---
+  // --- Data Loading and Core Logic ---
   Future<void> loadInitialData() async {
     _isLoading = true;
     dataLoadingError = null;
@@ -87,12 +93,14 @@ class SmokeDataProvider with ChangeNotifier {
       weeklyAvertedSticks = data['weeklyAvertedSticks']!;
       monthlyAvertedSticks = data['monthlyAvertedSticks']!;
       _lastRolloverTimestamp = data['lastRolloverTimestamp']!;
+      unlockedAchievementIds = data['unlockedAchievementIds']!;
 
       _healthMilestones = HealthData.milestones;
-      _generateBaselineHourlyMap(); // Generate map after settings are loaded
+      _generateBaselineHourlyMap();
 
       await _handleDailyRollover();
       _initializeTimer();
+      _checkAchievements();
     } catch (e) {
       dataLoadingError = "An unexpected error occurred: ${e.toString()}";
     }
@@ -101,6 +109,27 @@ class SmokeDataProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  void _initializeTimer() {
+    _mainTimer?.cancel();
+    final savingsRate =
+        _savingsService.calculateSavingsRatePerSecond(_settings);
+    final avertedSticksRate = _settings.baselineCigsPerDay / (24 * 60 * 60);
+
+    if (savingsRate <= 0 && avertedSticksRate <= 0) return;
+
+    _mainTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      dailySavings += savingsRate;
+      dailyAvertedSticks += avertedSticksRate;
+      _checkAchievements();
+
+      if (DateTime.now().second % 15 == 0) {
+        _persistData();
+      }
+      notifyListeners();
+    });
+  }
+
+  // --- Event Logging ---
   Future<void> logSmokeEvent() async {
     final newEvent = SmokeEvent(
       timestamp: DateTime.now(),
@@ -115,6 +144,7 @@ class SmokeDataProvider with ChangeNotifier {
     if (dailyAvertedSticks < 0) dailyAvertedSticks = 0;
 
     await _storageService.saveEvents(_events);
+    _checkAchievements();
     await _persistData();
     notifyListeners();
   }
@@ -126,33 +156,39 @@ class SmokeDataProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  // FIXED: Re-added the logManualEntry method.
+  Future<void> logManualEntry(DateTimeRange range, int packs) async {
+    await _storageService.logManualEntry(range, packs, _settings);
+    await loadInitialData(); // Reload all data to reflect the manual entry
+  }
+
   Future<void> updateSettings(UserSettings newSettings) async {
     _settings = newSettings;
     await _storageService.saveSettings(newSettings);
     await loadInitialData();
   }
 
-  // --- Core Logic ---
+  // --- Achievement Logic ---
+  void _checkAchievements() {
+    final newAchievements = _achievementService.checkAchievements(
+      dataProvider: this,
+      previouslyUnlockedIds: unlockedAchievementIds,
+    );
 
-  void _initializeTimer() {
-    _mainTimer?.cancel();
-    final savingsRate =
-        _savingsService.calculateSavingsRatePerSecond(_settings);
-    final avertedSticksRate = _settings.baselineCigsPerDay / (24 * 60 * 60);
-
-    if (savingsRate <= 0 && avertedSticksRate <= 0) return;
-
-    _mainTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      dailySavings += savingsRate;
-      dailyAvertedSticks += avertedSticksRate;
-
-      if (DateTime.now().second % 15 == 0) {
-        _persistData();
+    if (newAchievements.isNotEmpty) {
+      for (final ach in newAchievements) {
+        unlockedAchievementIds.add(ach.id);
       }
-      notifyListeners();
-    });
+      newlyUnlockedAchievements.addAll(newAchievements);
+    }
   }
 
+  void clearNewlyUnlockedAchievements() {
+    newlyUnlockedAchievements.clear();
+    notifyListeners();
+  }
+
+  // --- Persistence and Rollover ---
   Future<void> _persistData() async {
     await _storageService.saveData(
       dailySavings: dailySavings,
@@ -162,6 +198,7 @@ class SmokeDataProvider with ChangeNotifier {
       weeklyAvertedSticks: weeklyAvertedSticks,
       monthlyAvertedSticks: monthlyAvertedSticks,
       lastRolloverTimestamp: _lastRolloverTimestamp,
+      unlockedAchievementIds: unlockedAchievementIds,
     );
   }
 
@@ -305,10 +342,5 @@ class SmokeDataProvider with ChangeNotifier {
       dataLoadingError = "Failed to load 'equivalents.csv'.";
       return [];
     }
-  }
-
-  Future<void> logManualEntry(DateTimeRange range, int packs) async {
-    await _storageService.logManualEntry(range, packs, _settings);
-    await loadInitialData();
   }
 }

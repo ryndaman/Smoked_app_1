@@ -8,6 +8,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:smoked_1/models/equivalent_item.dart';
 import 'package:smoked_1/providers/smoke_data_provider.dart';
 import 'package:smoked_1/services/local_storage_service.dart';
+// FIXED: Corrected import path
+import 'package:smoked_1/widgets/achievements_section.dart';
 import 'package:smoked_1/widgets/daily_line_chart.dart';
 import 'package:smoked_1/widgets/hourly_line_chart.dart';
 
@@ -91,7 +93,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
         final settings = dataProvider.settings;
         final rate = settings.exchangeRates[settings.preferredCurrency] ?? 1.0;
 
-        // FIXED: Calculate total cost directly from the events list.
         final totalCostInBase = dataProvider.events
             .fold(0.0, (sum, event) => sum + event.pricePerStick);
         final totalCostInPreferredCurrency = totalCostInBase * rate;
@@ -253,6 +254,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     ? DailyLineChart(events: dataProvider.events)
                     : const HourlyLineChart(),
               ),
+              const SizedBox(height: 16),
+              // FIXED: Corrected widget name
+              const AchievementsSection(),
               const SizedBox(height: 16),
               Card(
                 color: Colors.brown[50],

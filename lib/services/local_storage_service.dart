@@ -72,7 +72,7 @@ class LocalStorageService {
     await prefs.setStringList(AppConstants.resistedEventsKey, eventsStringList);
   }
 
-  // --- MODIFIED: Combined Savings and Averted Sticks Persistence ---
+  // --- Combined Savings and Averted Sticks Persistence ---
   Future<void> saveData({
     required double dailySavings,
     required double weeklyNetSavings,
@@ -81,6 +81,7 @@ class LocalStorageService {
     required int weeklyAvertedSticks,
     required int monthlyAvertedSticks,
     required DateTime lastRolloverTimestamp,
+    required Set<String> unlockedAchievementIds, // ADDED
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('daily_savings', dailySavings);
@@ -91,10 +92,15 @@ class LocalStorageService {
     await prefs.setInt('monthly_averted_sticks', monthlyAvertedSticks);
     await prefs.setString(
         'last_rollover_timestamp', lastRolloverTimestamp.toIso8601String());
+    // ADDED: Persist unlocked achievement IDs
+    await prefs.setStringList(
+        'unlocked_achievement_ids', unlockedAchievementIds.toList());
   }
 
   Future<Map<String, dynamic>> getData() async {
     final prefs = await SharedPreferences.getInstance();
+    final achievementIds =
+        prefs.getStringList('unlocked_achievement_ids') ?? [];
     return {
       'dailySavings': prefs.getDouble('daily_savings') ?? 0.0,
       'weeklyNetSavings': prefs.getDouble('weekly_net_savings') ?? 0.0,
@@ -105,6 +111,7 @@ class LocalStorageService {
       'lastRolloverTimestamp': DateTime.parse(
           prefs.getString('last_rollover_timestamp') ??
               DateTime.now().toIso8601String()),
+      'unlockedAchievementIds': Set<String>.from(achievementIds), // ADDED
     };
   }
 

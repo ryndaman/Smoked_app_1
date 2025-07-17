@@ -1,32 +1,10 @@
 // lib/data/achievement_data.dart
 
-// MODIFIED: Added a new type for reduction-based achievements
-enum AchievementType {
-  time, // Based on duration since last smoke
-  savings, // Based on total money saved (from not smoking at all)
-  count, // Based on total number of cigarettes logged
-  reduction, // Based on smoking less than the baseline
-}
-
-class Achievement {
-  final String id;
-  final String title;
-  final String description;
-  final String iconIdentifier;
-  final AchievementType type;
-  final double threshold; // The value needed to unlock the achievement
-
-  const Achievement({
-    required this.id,
-    required this.title,
-    required this.description,
-    required this.iconIdentifier,
-    required this.type,
-    required this.threshold,
-  });
-}
+// FIXED: Removed duplicate class/enum definitions. Now importing the canonical models.
+import 'package:smoked_1/models/achievement.dart';
 
 class AchievementData {
+  // The list now correctly uses the imported Achievement model and AchievementType enum.
   static final List<Achievement> allAchievements = [
     // Time-based Achievements (threshold is in hours)
     const Achievement(
@@ -79,8 +57,7 @@ class AchievementData {
       type: AchievementType.savings,
       threshold: 50, // Approx. $50 USD
     ),
-
-    // --- ADDED: New Reduction & Savings Achievements ---
+    // Reduction-based Achievements
     const Achievement(
       id: 'reduction_1_day',
       title: 'A Better Day',
@@ -105,9 +82,8 @@ class AchievementData {
       description:
           'You have saved over \$25 by smoking less than your baseline.',
       iconIdentifier: 'piggy.bank',
-      type: AchievementType.savings, // This can reuse the savings type
-      threshold:
-          25, // This will be calculated from total saved, not total spent
+      type: AchievementType.savings,
+      threshold: 25,
     ),
   ];
 }
