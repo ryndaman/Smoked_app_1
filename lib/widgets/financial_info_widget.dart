@@ -19,7 +19,9 @@ class _FinancialInfoState extends State<FinancialInfo> {
   final PageController _spentPageController = PageController(initialPage: 5000);
   int _savedPageIndex = 5000;
   int _spentPageIndex = 5000;
-  final List<String> _periods = ['Today', 'This Week', 'This Month'];
+  final List<String> _periods = ['Today', 'Last 7-days', 'Last 30-days'];
+  final _compactFormatter = NumberFormat.compact();
+  // final List<String> _periods = ['Today', 'This Week', 'This Month'];
 
   @override
   void dispose() {
@@ -39,13 +41,13 @@ class _FinancialInfoState extends State<FinancialInfo> {
         // FIXED: Data maps now point to the new, correct state variables
         final savedAmounts = {
           'Today': dataProvider.dailySavings,
-          'This Week': dataProvider.weeklyNetSavings,
-          'This Month': dataProvider.monthlyNetSavings,
+          'Last 7-days': dataProvider.weeklyNetSavings,
+          'Last 30-days': dataProvider.monthlyNetSavings,
         };
         final avertedSticks = {
           'Today': dataProvider.dailyAvertedSticks.floor(),
-          'This Week': dataProvider.weeklyAvertedSticks,
-          'This Month': dataProvider.monthlyAvertedSticks,
+          'Last 7-days': dataProvider.weeklyAvertedSticks,
+          'Last 30-days': dataProvider.monthlyAvertedSticks,
         };
 
         return Container(
@@ -67,17 +69,21 @@ class _FinancialInfoState extends State<FinancialInfo> {
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // --- Saved Card Section ---
+                    // --- SAVED CARD SECTION ---
                     Expanded(
                       child: Column(
                         children: [
-                          Text("Money saved",
-                              style: TextStyle(
-                                  color: Theme.of(context)
-                                      .textTheme
-                                      .bodyLarge
-                                      ?.color,
-                                  fontWeight: FontWeight.bold)),
+                          FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text("Money saved",
+                                  style: TextStyle(
+                                    color: Theme.of(context)
+                                        .textTheme
+                                        .bodyLarge
+                                        ?.color,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ))),
                           const SizedBox(height: 4),
                           SizedBox(
                             height: 80,
@@ -94,7 +100,7 @@ class _FinancialInfoState extends State<FinancialInfo> {
                                   amount: (savedAmounts[period] ?? 0.0) *
                                       exchangeRate,
                                   subtitle:
-                                      '${avertedSticks[period] ?? 0} smoke(s) averted',
+                                      '${_compactFormatter.format(avertedSticks[period] ?? 0)} smoke(s) averted',
                                   period: period,
                                   color: Colors.green[800]!,
                                 );
@@ -106,17 +112,23 @@ class _FinancialInfoState extends State<FinancialInfo> {
                       ),
                     ),
                     const SizedBox(width: 16),
-                    // --- Spent Card Section ---
+
+                    // --- WASTED CARD SECTION ---
                     Expanded(
                       child: Column(
                         children: [
-                          Text("Money turned to smoke",
-                              style: TextStyle(
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text("Money turned to smoke",
+                                style: TextStyle(
                                   color: Theme.of(context)
                                       .textTheme
                                       .bodyLarge
                                       ?.color,
-                                  fontWeight: FontWeight.bold)),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                )),
+                          ),
                           const SizedBox(height: 4),
                           SizedBox(
                             height: 80,
@@ -136,12 +148,12 @@ class _FinancialInfoState extends State<FinancialInfo> {
                                         e.timestamp.month == now.month &&
                                         e.timestamp.day == now.day;
                                   }
-                                  if (period == 'This Week') {
+                                  if (period == 'Last 7-days') {
                                     final startOfWeek = now.subtract(
                                         Duration(days: now.weekday - 1));
                                     return e.timestamp.isAfter(startOfWeek);
                                   }
-                                  if (period == 'This Month') {
+                                  if (period == 'Last 30-days') {
                                     return e.timestamp.year == now.year &&
                                         e.timestamp.month == now.month;
                                   }
@@ -155,7 +167,7 @@ class _FinancialInfoState extends State<FinancialInfo> {
                                   formatter: widget.formatter,
                                   amount: spentAmount * exchangeRate,
                                   subtitle:
-                                      'from ${eventsInPeriod.length} cigarette(s)',
+                                      'from ${_compactFormatter.format(eventsInPeriod.length)} cigarette(s)',
                                   period: period,
                                   color: Colors.red[800]!,
                                 );
