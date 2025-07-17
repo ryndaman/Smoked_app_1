@@ -112,7 +112,7 @@ class HourlyLineChart extends StatelessWidget {
             const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         leftTitles: AxisTitles(
           sideTitles: SideTitles(
-            showTitles: true,
+            showTitles: false,
             interval: 1,
             getTitlesWidget: (value, meta) {
               if (value % 1 != 0 || value > maxAverage.ceil()) {

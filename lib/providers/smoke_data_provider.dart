@@ -38,7 +38,7 @@ class SmokeDataProvider with ChangeNotifier {
   int weeklyAvertedSticks = 0;
   int monthlyAvertedSticks = 0;
   late DateTime _lastRolloverTimestamp;
-  final Map<int, double> _baselineHourlyMap = {};
+  Map<int, double> _baselineHourlyMap = {};
 
   // --- Achievement State ---
   Set<String> unlockedAchievementIds = {};
@@ -264,7 +264,84 @@ class SmokeDataProvider with ChangeNotifier {
   }
 
   void _generateBaselineHourlyMap() {
-    // ... (logic remains the same)
+    final Map<int, double> hourlyDistribution = {
+      for (var i = 0; i < 24; i++) i: 0.0
+    };
+    if (_settings.baselineCigsPerDay <= 0) {
+      _baselineHourlyMap = hourlyDistribution;
+      return;
+    }
+
+    final selectedTimes = _settings.smokingTimes;
+    final timeRanges = {
+      'In the Morning': {7, 8, 9},
+      'During Work Breaks': {10, 15},
+      'After Meals': {8, 13, 19},
+      'While Driving': {7, 8, 17, 18},
+      'With Coffee/Alcohol': {9, 16, 20},
+    };
+
+    final coreWakingHours = {
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22
+    };
+    final lateNightHours = {22, 23, 0, 1};
+
+    Set<int> highTrafficHours = {};
+    for (var time in selectedTimes) {
+      if (timeRanges.containsKey(time)) {
+        highTrafficHours.addAll(timeRanges[time]!);
+      }
+    }
+
+    Set<int> allWakingHours = Set.from(coreWakingHours);
+    if (selectedTimes.contains('Late at Night')) {
+      allWakingHours.addAll(lateNightHours);
+    }
+
+    highTrafficHours = highTrafficHours.intersection(allWakingHours);
+
+    final otherWakingHours = allWakingHours.difference(highTrafficHours);
+
+    final double highTrafficCigs = _settings.baselineCigsPerDay * 0.7;
+    final double otherCigs = _settings.baselineCigsPerDay * 0.3;
+
+    if (highTrafficHours.isNotEmpty) {
+      final double cigsPerHighTrafficHour =
+          highTrafficCigs / highTrafficHours.length;
+      for (var hour in highTrafficHours) {
+        hourlyDistribution[hour] =
+            (hourlyDistribution[hour] ?? 0) + cigsPerHighTrafficHour;
+      }
+    }
+
+    if (otherWakingHours.isNotEmpty) {
+      final double cigsPerOtherHour = (highTrafficHours.isEmpty
+              ? _settings.baselineCigsPerDay
+              : otherCigs) /
+          otherWakingHours.length;
+      for (var hour in otherWakingHours) {
+        hourlyDistribution[hour] =
+            (hourlyDistribution[hour] ?? 0) + cigsPerOtherHour;
+      }
+    }
+
+    _baselineHourlyMap = hourlyDistribution;
   }
 
   Future<List<EquivalentItem>> _loadEquivalentsFromCsv() async {
