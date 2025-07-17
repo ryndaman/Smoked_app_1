@@ -2,8 +2,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:smoked_1/data/coping_tips.dart';
 import 'package:smoked_1/providers/smoke_data_provider.dart';
 import 'package:smoked_1/screens/breathing_exercise_screen.dart';
+import 'package:smoked_1/screens/coping_tip_screen.dart';
 import 'dart:math';
 
 class ActionButtonCarousel extends StatefulWidget {
@@ -31,26 +33,47 @@ class _ActionButtonCarouselState extends State<ActionButtonCarousel> {
     super.dispose();
   }
 
+  // NEW: Method to show the coping options dialog.
+  void _showCopingOptions(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text("Ride the Wave"),
+          content: const Text("How would you like to manage this craving?"),
+          actions: [
+            TextButton(
+              child: const Text("Breathing Exercise"),
+              onPressed: () {
+                Navigator.of(dialogContext).pop(); // Close the dialog
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (context) => const BreathingExerciseScreen()),
+                );
+              },
+            ),
+            TextButton(
+              child: const Text("Get a Quick Tip"),
+              onPressed: () {
+                final tip = CopingTipsData.getRandomTip();
+                Navigator.of(dialogContext).pop(); // Close the dialog
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                      builder: (context) => CopingTipScreen(tip: tip)),
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final dataProvider = Provider.of<SmokeDataProvider>(context, listen: false);
 
     final List<Widget> actionButtons = [
-      // --- I Resisted Button ---
-      // _ActionButton(
-      //   label: "I resisted",
-      //   color: Colors.green,
-      //   onPressed: () {
-      //     dataProvider.logResistedEvent();
-      //     ScaffoldMessenger.of(context).showSnackBar(
-      //       const SnackBar(
-      //         content: Text("Craving conquered! Well done."),
-      //         duration: Duration(seconds: 2),
-      //       ),
-      //     );
-      //   },
-      // ),
-      // --- I Smoked One Button ---
       _ActionButton(
         label: "I smoked one",
         color: Colors.red,
@@ -60,13 +83,11 @@ class _ActionButtonCarouselState extends State<ActionButtonCarousel> {
       ),
       // --- Help Me Button ---
       _ActionButton(
-        label: "Help me...",
+        label: "Ride the Wave",
+        subtitle: Text("this will pass", style: TextStyle(fontSize: 12.0)),
         color: Colors.lightBlue,
         onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-                builder: (context) => const BreathingExerciseScreen()),
-          );
+          _showCopingOptions(context); // MODIFIED: Show dialog on press
         },
       ),
     ];
@@ -106,11 +127,13 @@ class _ActionButtonCarouselState extends State<ActionButtonCarousel> {
 // Helper widget for the individual circular buttons
 class _ActionButton extends StatelessWidget {
   final String label;
+  final Text? subtitle;
   final Color color;
   final VoidCallback onPressed;
 
   const _ActionButton({
     required this.label,
+    this.subtitle,
     required this.color,
     required this.onPressed,
   });
@@ -118,32 +141,35 @@ class _ActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 180,
-      height: 180,
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: color,
-          foregroundColor: Colors.white,
-          shape: const CircleBorder(),
-          elevation: 8,
-          shadowColor: color.withAlpha(100),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const SizedBox(height: 8),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+        width: 180,
+        height: 180,
+        child: ElevatedButton(
+          onPressed: onPressed,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: color,
+            foregroundColor: Colors.white,
+            shape: const CircleBorder(),
+            elevation: 8,
+            shadowColor: color.withAlpha(100),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 8),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
+              if (subtitle != null) ...[
+                const SizedBox(height: 2),
+                subtitle!,
+              ],
+            ],
+          ),
+        ));
   }
 }
