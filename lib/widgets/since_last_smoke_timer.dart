@@ -1,18 +1,43 @@
 // lib/widgets/since_last_smoke_timer.dart
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:smoked_1/providers/smoke_data_provider.dart';
 
-class SinceLastSmokeTimer extends StatelessWidget {
+// MODIFIED: Converted to a StatefulWidget to manage its own timer.
+class SinceLastSmokeTimer extends StatefulWidget {
   const SinceLastSmokeTimer({super.key});
 
   @override
+  State<SinceLastSmokeTimer> createState() => _SinceLastSmokeTimerState();
+}
+
+class _SinceLastSmokeTimerState extends State<SinceLastSmokeTimer> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    // This timer will rebuild only this widget every second.
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    // This widget now only needs to listen to the provider to get the start time.
     return Consumer<SmokeDataProvider>(
       builder: (context, dataProvider, child) {
-        // Determine the starting point of the timer.
-        // It's either the first smoke event or the app install time (approximated by first event).
         final startTime = dataProvider.events.isNotEmpty
             ? dataProvider.events.last.timestamp
             : (dataProvider.events.isNotEmpty
@@ -21,7 +46,6 @@ class SinceLastSmokeTimer extends StatelessWidget {
 
         final duration = DateTime.now().difference(startTime);
 
-        // Format the duration into DD : HH : MM : SS
         String twoDigits(int n) => n.toString().padLeft(2, '0');
         final days = twoDigits(duration.inDays);
         final hours = twoDigits(duration.inHours.remainder(24));
@@ -43,15 +67,6 @@ class SinceLastSmokeTimer extends StatelessWidget {
                 const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
             child: Column(
               children: [
-                // Text(
-                //   "DD   HH   MM   SS",
-                //   style: TextStyle(
-                //     color: Colors.grey[600],
-                //     fontWeight: FontWeight.bold,
-                //     fontSize: 14,
-                //     letterSpacing: 1.0,
-                //   ),
-                // ),
                 const SizedBox(height: 4),
                 FittedBox(
                   fit: BoxFit.scaleDown,

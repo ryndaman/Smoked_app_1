@@ -48,6 +48,7 @@ class ThemeProvider with ChangeNotifier {
       _themeData = AppThemes.original;
     }
 
+    // CORRECTED: Changed '_key' to the correct constant '_themeKey'
     await prefs.setString(_themeKey, theme.name);
     notifyListeners();
   }

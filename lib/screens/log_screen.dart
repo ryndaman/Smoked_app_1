@@ -1,6 +1,5 @@
 // lib/screens/log_screen.dart
 
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -10,7 +9,7 @@ import 'package:smoked_1/providers/theme_provider.dart';
 import 'package:smoked_1/utils/app_themes.dart';
 import 'package:smoked_1/widgets/financial_info_widget.dart';
 import 'package:smoked_1/widgets/action_button_carousel.dart';
-import 'package:smoked_1/widgets/since_last_smoke_timer.dart'; // ADDED
+import 'package:smoked_1/widgets/since_last_smoke_timer.dart';
 
 class LogScreen extends StatefulWidget {
   const LogScreen({super.key});
@@ -20,24 +19,8 @@ class LogScreen extends StatefulWidget {
 }
 
 class _LogScreenState extends State<LogScreen> {
-  Timer? _buttonUpdateTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    // This timer is still needed to trigger rebuilds for the timer widget
-    _buttonUpdateTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
-        setState(() {});
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _buttonUpdateTimer?.cancel();
-    super.dispose();
-  }
+  // REMOVED: The redundant timer is no longer needed here.
+  // The SinceLastSmokeTimer widget now manages its own state and timer.
 
   @override
   Widget build(BuildContext context) {
@@ -73,14 +56,13 @@ class _LogScreenState extends State<LogScreen> {
           body: SingleChildScrollView(
             child: Center(
               child: Padding(
-                padding: const EdgeInsets.all(12.0), // Adjusted padding
-                // MODIFIED: The main column now includes the new timer widget in the correct order
+                padding: const EdgeInsets.all(12.0),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     FinancialInfo(formatter: formatter),
                     const SizedBox(height: 12),
-                    const SinceLastSmokeTimer(), // ADDED: The new timer widget
+                    const SinceLastSmokeTimer(),
                     const SizedBox(height: 12),
                     const ActionButtonCarousel(),
                   ],

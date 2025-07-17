@@ -4,7 +4,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:csv/csv.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smoked_1/data/health_data.dart';
 import 'package:smoked_1/models/equivalent_item.dart';
 import 'package:smoked_1/models/health_milestone.dart';
@@ -12,28 +11,31 @@ import 'package:smoked_1/models/resisted_event.dart';
 import 'package:smoked_1/models/smoke_event.dart';
 import 'package:smoked_1/models/user_settings.dart';
 import 'package:smoked_1/services/local_storage_service.dart';
+import 'package:smoked_1/services/savings_service.dart';
 
 class SmokeDataProvider with ChangeNotifier {
   final LocalStorageService _storageService = LocalStorageService();
-  Timer? _savingsTimer;
+  final SavingsService _savingsService = SavingsService();
+  Timer? _mainTimer;
 
   // --- State Properties ---
   bool _isLoading = true;
   late UserSettings _settings;
   late List<SmokeEvent> _events;
-  late List<ResistedEvent> _resistedEvents = [];
+  late List<ResistedEvent> _resistedEvents;
   late List<EquivalentItem> _equivalents;
   late List<HealthMilestone> _healthMilestones;
-
-  double _totalMoneySaved = 0.0;
-  Map<int, double> _baselineHourlyMap = {};
   String? dataLoadingError;
 
-  Map<String, double> moneySpentByPeriod = {};
-  Map<String, double> moneySavedByPeriod = {};
-  Map<String, int> sticksAvertedByPeriod = {};
-
-  double _moneySavedSinceLastCalculation = 0.0;
+  // --- V2 Savings & Averted Sticks State ---
+  double dailySavings = 0.0;
+  double weeklyNetSavings = 0.0;
+  double monthlyNetSavings = 0.0;
+  double dailyAvertedSticks = 0.0;
+  int weeklyAvertedSticks = 0;
+  int monthlyAvertedSticks = 0;
+  late DateTime _lastRolloverTimestamp;
+  Map<int, double> _baselineHourlyMap = {}; // This remains private
 
   // --- Getters ---
   bool get isLoading => _isLoading;
@@ -42,20 +44,18 @@ class SmokeDataProvider with ChangeNotifier {
   List<ResistedEvent> get resistedEvents => _resistedEvents;
   List<EquivalentItem> get equivalents => _equivalents;
   List<HealthMilestone> get healthMilestones => _healthMilestones;
-  double get totalMoneySaved => _totalMoneySaved;
-  Map<int, double> get baselineHourlyMap => _baselineHourlyMap;
   int get totalSticks => _events.length;
+  // ADDED: Public getter for the hourly map to fix UI error.
+  Map<int, double> get baselineHourlyMap => _baselineHourlyMap;
 
   // --- Constructor ---
   SmokeDataProvider() {
-    loadInitialData().then((_) {
-      _initializeSavingsTimer();
-    });
+    loadInitialData();
   }
 
   @override
   void dispose() {
-    _savingsTimer?.cancel();
+    _mainTimer?.cancel();
     super.dispose();
   }
 
@@ -71,24 +71,28 @@ class SmokeDataProvider with ChangeNotifier {
         _storageService.getSmokeEvents(),
         _storageService.getResistedEvents(),
         _loadEquivalentsFromCsv(),
-        _loadMoneySaved(),
+        _storageService.getData(),
       ]);
 
       _settings = results[0] as UserSettings;
       _events = results[1] as List<SmokeEvent>;
       _resistedEvents = results[2] as List<ResistedEvent>;
       _equivalents = results[3] as List<EquivalentItem>;
-      _moneySavedSinceLastCalculation = results[4] as double;
-      _totalMoneySaved = _moneySavedSinceLastCalculation;
+      final data = results[4] as Map<String, dynamic>;
+
+      dailySavings = data['dailySavings']!;
+      weeklyNetSavings = data['weeklyNetSavings']!;
+      monthlyNetSavings = data['monthlyNetSavings']!;
+      dailyAvertedSticks = data['dailyAvertedSticks']!;
+      weeklyAvertedSticks = data['weeklyAvertedSticks']!;
+      monthlyAvertedSticks = data['monthlyAvertedSticks']!;
+      _lastRolloverTimestamp = data['lastRolloverTimestamp']!;
 
       _healthMilestones = HealthData.milestones;
+      _generateBaselineHourlyMap(); // Generate map after settings are loaded
 
-      if (dataLoadingError == null && _equivalents.isEmpty) {
-        dataLoadingError =
-            "Could not load equivalent items. The file might be empty.";
-      }
-
-      _calculateAllMetrics();
+      await _handleDailyRollover();
+      _initializeTimer();
     } catch (e) {
       dataLoadingError = "An unexpected error occurred: ${e.toString()}";
     }
@@ -104,12 +108,14 @@ class SmokeDataProvider with ChangeNotifier {
     );
     _events.add(newEvent);
 
-    _totalMoneySaved -= _settings.pricePerStickInBaseCurrency;
-    if (_totalMoneySaved < 0) _totalMoneySaved = 0;
+    dailySavings -= _settings.pricePerStickInBaseCurrency;
+    if (dailySavings < 0) dailySavings = 0;
+
+    dailyAvertedSticks -= 1;
+    if (dailyAvertedSticks < 0) dailyAvertedSticks = 0;
 
     await _storageService.saveEvents(_events);
-    await _saveMoneySaved();
-    _calculateAllMetrics();
+    await _persistData();
     notifyListeners();
   }
 
@@ -120,87 +126,85 @@ class SmokeDataProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> logManualEntry(DateTimeRange range, int packs) async {
-    await _storageService.logManualEntry(range, packs, _settings);
-    await loadInitialData();
-  }
-
   Future<void> updateSettings(UserSettings newSettings) async {
     _settings = newSettings;
     await _storageService.saveSettings(newSettings);
     await loadInitialData();
-    _savingsTimer?.cancel();
-    _initializeSavingsTimer();
   }
 
-  // --- Helper Methods ---
+  // --- Core Logic ---
 
-  void _initializeSavingsTimer() {
-    if (_settings.baselineCigsPerDay <= 0) return;
+  void _initializeTimer() {
+    _mainTimer?.cancel();
+    final savingsRate =
+        _savingsService.calculateSavingsRatePerSecond(_settings);
+    final avertedSticksRate = _settings.baselineCigsPerDay / (24 * 60 * 60);
 
-    final double costPerDay =
-        _settings.baselineCigsPerDay * _settings.pricePerStickInBaseCurrency;
-    final double savingsRatePerSecond = costPerDay / (24 * 60 * 60);
+    if (savingsRate <= 0 && avertedSticksRate <= 0) return;
 
-    _savingsTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      _totalMoneySaved += savingsRatePerSecond;
-      if (DateTime.now().second % 60 == 0) {
-        _saveMoneySaved();
+    _mainTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      dailySavings += savingsRate;
+      dailyAvertedSticks += avertedSticksRate;
+
+      if (DateTime.now().second % 15 == 0) {
+        _persistData();
       }
       notifyListeners();
     });
   }
 
-  Future<void> _saveMoneySaved() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('total_money_saved', _totalMoneySaved);
+  Future<void> _persistData() async {
+    await _storageService.saveData(
+      dailySavings: dailySavings,
+      weeklyNetSavings: weeklyNetSavings,
+      monthlyNetSavings: monthlyNetSavings,
+      dailyAvertedSticks: dailyAvertedSticks,
+      weeklyAvertedSticks: weeklyAvertedSticks,
+      monthlyAvertedSticks: monthlyAvertedSticks,
+      lastRolloverTimestamp: _lastRolloverTimestamp,
+    );
   }
 
-  Future<double> _loadMoneySaved() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getDouble('total_money_saved') ?? 0.0;
-  }
-
-  void _calculateAllMetrics() {
+  Future<void> _handleDailyRollover() async {
     final now = DateTime.now();
-    final pricePerStick = _settings.pricePerStickInBaseCurrency;
+    final today = DateTime(now.year, now.month, now.day);
+    final lastRolloverDay = DateTime(_lastRolloverTimestamp.year,
+        _lastRolloverTimestamp.month, _lastRolloverTimestamp.day);
 
-    List<SmokeEvent> getEventsForPeriod(int days) {
-      final cutoff = now.subtract(Duration(days: days));
-      return _events.where((event) => event.timestamp.isAfter(cutoff)).toList();
+    if (today.isAfter(lastRolloverDay)) {
+      final daysSinceLastRollover = today.difference(lastRolloverDay).inDays;
+
+      for (var i = 0; i < daysSinceLastRollover; i++) {
+        final dayToProcess = lastRolloverDay.add(Duration(days: i));
+
+        double netSavingsForDay = (i == 0)
+            ? dailySavings
+            : _settings.baselineCigsPerDay *
+                _settings.pricePerStickInBaseCurrency;
+        int netAvertedSticksForDay = (i == 0)
+            ? dailyAvertedSticks.floor()
+            : _settings.baselineCigsPerDay;
+
+        if (dayToProcess.weekday == DateTime.monday) {
+          weeklyNetSavings = 0;
+          weeklyAvertedSticks = 0;
+        }
+        if (dayToProcess.day == 1) {
+          monthlyNetSavings = 0;
+          monthlyAvertedSticks = 0;
+        }
+
+        weeklyNetSavings += netSavingsForDay;
+        monthlyNetSavings += netSavingsForDay;
+        weeklyAvertedSticks += netAvertedSticksForDay;
+        monthlyAvertedSticks += netAvertedSticksForDay;
+      }
+
+      dailySavings = 0.0;
+      dailyAvertedSticks = 0.0;
+      _lastRolloverTimestamp = now;
+      await _persistData();
     }
-
-    final periods = {'Today': 1, 'Week': 7, 'Month': 30};
-    periods.forEach((key, days) {
-      final eventsInPeriod = getEventsForPeriod(days);
-      final costInPeriod = eventsInPeriod.length * pricePerStick;
-      moneySpentByPeriod[key] = costInPeriod;
-
-      final baselineSticksInPeriod = _settings.baselineCigsPerDay * days;
-      final avertedSticks = baselineSticksInPeriod - eventsInPeriod.length;
-      sticksAvertedByPeriod[key] = avertedSticks > 0 ? avertedSticks : 0;
-
-      final baselineCostInPeriod = baselineSticksInPeriod * pricePerStick;
-      final savedInPeriod = baselineCostInPeriod - costInPeriod;
-      moneySavedByPeriod[key] = savedInPeriod > 0 ? savedInPeriod : 0;
-    });
-
-    final allTimeCost = _events.length * pricePerStick;
-    moneySpentByPeriod['All-Time'] = allTimeCost;
-    moneySavedByPeriod['All-Time'] = _totalMoneySaved;
-
-    if (_events.isNotEmpty) {
-      final daysSinceStart = now.difference(_events.first.timestamp).inDays + 1;
-      final allTimeBaselineSticks =
-          _settings.baselineCigsPerDay * daysSinceStart;
-      final allTimeAvertedSticks = allTimeBaselineSticks - _events.length;
-      sticksAvertedByPeriod['All-Time'] =
-          allTimeAvertedSticks > 0 ? allTimeAvertedSticks : 0;
-    } else {
-      sticksAvertedByPeriod['All-Time'] = 0;
-    }
-
-    _generateBaselineHourlyMap();
   }
 
   void _generateBaselineHourlyMap() {
@@ -237,8 +241,7 @@ class SmokeDataProvider with ChangeNotifier {
       18,
       19,
       20,
-      21,
-      22
+      21
     };
     final lateNightHours = {22, 23, 0, 1};
 
@@ -255,7 +258,6 @@ class SmokeDataProvider with ChangeNotifier {
     }
 
     highTrafficHours = highTrafficHours.intersection(allWakingHours);
-
     final otherWakingHours = allWakingHours.difference(highTrafficHours);
 
     final double highTrafficCigs = _settings.baselineCigsPerDay * 0.7;
@@ -290,24 +292,23 @@ class SmokeDataProvider with ChangeNotifier {
       final List<List<dynamic>> csvTable =
           const CsvToListConverter(eol: '\n').convert(rawCsv).sublist(1);
 
-      List<EquivalentItem> loadedEquivalents = [];
-      for (var row in csvTable) {
-        if (row.length > 2) {
-          loadedEquivalents.add(
-            EquivalentItem(
-              name: row[0].toString(),
-              price: int.tryParse(row[1].toString()) ?? 0,
-              iconIdentifier: row[2].toString(),
-            ),
-          );
-        }
-      }
-      return loadedEquivalents;
+      return csvTable
+          .where((row) => row.length > 2)
+          .map((row) => EquivalentItem(
+                name: row[0].toString(),
+                price: int.tryParse(row[1].toString()) ?? 0,
+                iconIdentifier: row[2].toString(),
+              ))
+          .toList();
     } catch (e) {
       debugPrint("Error loading equivalents.csv: $e");
-      dataLoadingError =
-          "Failed to load 'equivalents.csv'. Please check the file and restart the app.";
+      dataLoadingError = "Failed to load 'equivalents.csv'.";
       return [];
     }
+  }
+
+  Future<void> logManualEntry(DateTimeRange range, int packs) async {
+    await _storageService.logManualEntry(range, packs, _settings);
+    await loadInitialData();
   }
 }

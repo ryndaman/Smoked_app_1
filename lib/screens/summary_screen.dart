@@ -91,8 +91,9 @@ class _SummaryScreenState extends State<SummaryScreen> {
         final settings = dataProvider.settings;
         final rate = settings.exchangeRates[settings.preferredCurrency] ?? 1.0;
 
-        final totalCostInBase =
-            dataProvider.moneySpentByPeriod['All-Time'] ?? 0.0;
+        // FIXED: Calculate total cost directly from the events list.
+        final totalCostInBase = dataProvider.events
+            .fold(0.0, (sum, event) => sum + event.pricePerStick);
         final totalCostInPreferredCurrency = totalCostInBase * rate;
 
         EquivalentItem equivalentItem = const EquivalentItem(
@@ -132,8 +133,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
           body: ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             children: [
-              // --- Equivalent Item Card ---
-              // MODIFIED: Show an error card if data loading failed.
               if (dataProvider.dataLoadingError != null)
                 Card(
                   color: Colors.red[50],
@@ -209,8 +208,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
                   ),
                 ),
               const SizedBox(height: 10),
-
-              // --- Chart Section ---
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -257,8 +254,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     : const HourlyLineChart(),
               ),
               const SizedBox(height: 16),
-
-              // --- Quote Card ---
               Card(
                 color: Colors.brown[50],
                 elevation: 0,

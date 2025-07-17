@@ -72,6 +72,42 @@ class LocalStorageService {
     await prefs.setStringList(AppConstants.resistedEventsKey, eventsStringList);
   }
 
+  // --- MODIFIED: Combined Savings and Averted Sticks Persistence ---
+  Future<void> saveData({
+    required double dailySavings,
+    required double weeklyNetSavings,
+    required double monthlyNetSavings,
+    required double dailyAvertedSticks,
+    required int weeklyAvertedSticks,
+    required int monthlyAvertedSticks,
+    required DateTime lastRolloverTimestamp,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('daily_savings', dailySavings);
+    await prefs.setDouble('weekly_net_savings', weeklyNetSavings);
+    await prefs.setDouble('monthly_net_savings', monthlyNetSavings);
+    await prefs.setDouble('daily_averted_sticks', dailyAvertedSticks);
+    await prefs.setInt('weekly_averted_sticks', weeklyAvertedSticks);
+    await prefs.setInt('monthly_averted_sticks', monthlyAvertedSticks);
+    await prefs.setString(
+        'last_rollover_timestamp', lastRolloverTimestamp.toIso8601String());
+  }
+
+  Future<Map<String, dynamic>> getData() async {
+    final prefs = await SharedPreferences.getInstance();
+    return {
+      'dailySavings': prefs.getDouble('daily_savings') ?? 0.0,
+      'weeklyNetSavings': prefs.getDouble('weekly_net_savings') ?? 0.0,
+      'monthlyNetSavings': prefs.getDouble('monthly_net_savings') ?? 0.0,
+      'dailyAvertedSticks': prefs.getDouble('daily_averted_sticks') ?? 0.0,
+      'weeklyAvertedSticks': prefs.getInt('weekly_averted_sticks') ?? 0,
+      'monthlyAvertedSticks': prefs.getInt('monthly_averted_sticks') ?? 0,
+      'lastRolloverTimestamp': DateTime.parse(
+          prefs.getString('last_rollover_timestamp') ??
+              DateTime.now().toIso8601String()),
+    };
+  }
+
   Future<void> logManualEntry(
       DateTimeRange range, int packs, UserSettings settings) async {
     if (settings.cigsPerPack <= 0 || packs <= 0) return;
@@ -94,7 +130,6 @@ class LocalStorageService {
     await saveEvents(events);
   }
 
-  // --- CSV Report Generation ---
   Future<String> generateCsvReport() async {
     final events = await getSmokeEvents();
     final settings = await getSettings();
