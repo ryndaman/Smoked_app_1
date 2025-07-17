@@ -8,7 +8,6 @@ import 'package:smoked_1/data/health_data.dart';
 import 'package:smoked_1/models/achievement.dart';
 import 'package:smoked_1/models/equivalent_item.dart';
 import 'package:smoked_1/models/health_milestone.dart';
-import 'package:smoked_1/models/resisted_event.dart';
 import 'package:smoked_1/models/smoke_event.dart';
 import 'package:smoked_1/models/user_settings.dart';
 import 'package:smoked_1/services/achievement_service.dart';
@@ -25,7 +24,6 @@ class SmokeDataProvider with ChangeNotifier {
   bool _isLoading = true;
   late UserSettings _settings;
   late List<SmokeEvent> _events;
-  late List<ResistedEvent> _resistedEvents;
   late List<EquivalentItem> _equivalents;
   late List<HealthMilestone> _healthMilestones;
   String? dataLoadingError;
@@ -51,12 +49,10 @@ class SmokeDataProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   UserSettings get settings => _settings;
   List<SmokeEvent> get events => _events;
-  List<ResistedEvent> get resistedEvents => _resistedEvents;
   List<EquivalentItem> get equivalents => _equivalents;
   int get totalSticks => _events.length;
   Map<int, double> get baselineHourlyMap => _baselineHourlyMap;
   List<HealthMilestone> get healthMilestones => _healthMilestones;
-  // FIXED: The getter now returns the state variable directly.
   SmokeEvent? get latestSmokeEvent => _latestSmokeEvent;
 
   // --- Constructor & Dispose ---
@@ -78,18 +74,16 @@ class SmokeDataProvider with ChangeNotifier {
 
     try {
       final results = await Future.wait([
-        _storageService.getSettings(),
-        _storageService.getSmokeEvents(),
-        _storageService.getResistedEvents(),
-        _loadEquivalentsFromCsv(),
-        _storageService.getData(),
+        _storageService.getSettings(), // Index 0
+        _storageService.getSmokeEvents(), // Index 1
+        _loadEquivalentsFromCsv(), // NEW INDEX: 2
+        _storageService.getData(), // NEW INDEX: 3
       ]);
 
       _settings = results[0] as UserSettings;
       _events = results[1] as List<SmokeEvent>;
-      _resistedEvents = results[2] as List<ResistedEvent>;
-      _equivalents = results[3] as List<EquivalentItem>;
-      final data = results[4] as Map<String, dynamic>;
+      _equivalents = results[2] as List<EquivalentItem>; // Corrected index
+      final data = results[3] as Map<String, dynamic>; // Corrected index
 
       dailySavings = data['dailySavings']!;
       weeklyNetSavings = data['weeklyNetSavings']!;
@@ -102,7 +96,7 @@ class SmokeDataProvider with ChangeNotifier {
 
       _healthMilestones = HealthData.milestones;
       _generateBaselineHourlyMap();
-      _updateLatestSmokeEvent(); // FIXED: Update the latest event on load.
+      _updateLatestSmokeEvent();
 
       await _handleDailyRollover();
       _initializeTimer();
@@ -142,7 +136,7 @@ class SmokeDataProvider with ChangeNotifier {
       pricePerStick: _settings.pricePerStickInBaseCurrency,
     );
     _events.add(newEvent);
-    _updateLatestSmokeEvent(); // FIXED: Update the latest event after logging.
+    _updateLatestSmokeEvent();
 
     dailySavings -= _settings.pricePerStickInBaseCurrency;
     if (dailySavings < 0) dailySavings = 0;
@@ -158,27 +152,17 @@ class SmokeDataProvider with ChangeNotifier {
 
   Future<void> logManualEntry(DateTimeRange range, int packs) async {
     await _storageService.logManualEntry(range, packs, _settings);
-    // Reloading data will automatically call _updateLatestSmokeEvent
     await loadInitialData();
   }
 
-  // --- NEW: Centralized method to update the latest smoke event ---
   void _updateLatestSmokeEvent() {
     if (_events.isEmpty) {
       _latestSmokeEvent = null;
       return;
     }
-    // This performs the sort only when necessary.
     final sortedEvents = List<SmokeEvent>.from(_events)
       ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
     _latestSmokeEvent = sortedEvents.first;
-  }
-
-  Future<void> logResistedEvent() async {
-    final newEvent = ResistedEvent(timestamp: DateTime.now());
-    _resistedEvents.add(newEvent);
-    await _storageService.saveResistedEvents(_resistedEvents);
-    notifyListeners();
   }
 
   Future<void> updateSettings(UserSettings newSettings) async {
@@ -279,6 +263,7 @@ class SmokeDataProvider with ChangeNotifier {
       'After Meals': {8, 13, 19},
       'While Driving': {7, 8, 17, 18},
       'With Coffee/Alcohol': {9, 16, 20},
+      'Late at Night': {22, 23, 0, 1}
     };
 
     final coreWakingHours = {

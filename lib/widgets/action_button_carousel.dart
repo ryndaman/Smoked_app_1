@@ -37,19 +37,19 @@ class _ActionButtonCarouselState extends State<ActionButtonCarousel> {
 
     final List<Widget> actionButtons = [
       // --- I Resisted Button ---
-      _ActionButton(
-        label: "I resisted",
-        color: Colors.green,
-        onPressed: () {
-          dataProvider.logResistedEvent();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Craving conquered! Well done."),
-              duration: Duration(seconds: 2),
-            ),
-          );
-        },
-      ),
+      // _ActionButton(
+      //   label: "I resisted",
+      //   color: Colors.green,
+      //   onPressed: () {
+      //     dataProvider.logResistedEvent();
+      //     ScaffoldMessenger.of(context).showSnackBar(
+      //       const SnackBar(
+      //         content: Text("Craving conquered! Well done."),
+      //         duration: Duration(seconds: 2),
+      //       ),
+      //     );
+      //   },
+      // ),
       // --- I Smoked One Button ---
       _ActionButton(
         label: "I smoked one",

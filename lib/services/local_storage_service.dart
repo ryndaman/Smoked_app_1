@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:smoked_1/models/resisted_event.dart';
 import 'package:smoked_1/models/smoke_event.dart';
 import 'package:smoked_1/models/user_settings.dart';
 import 'package:smoked_1/utils/constants.dart';
@@ -55,22 +54,22 @@ class LocalStorageService {
     await prefs.setStringList(AppConstants.eventsKey, eventsStringList);
   }
 
-  // --- Resisted Event Methods ---
-  Future<List<ResistedEvent>> getResistedEvents() async {
-    final prefs = await SharedPreferences.getInstance();
-    final eventsStringList =
-        prefs.getStringList(AppConstants.resistedEventsKey) ?? [];
-    return eventsStringList
-        .map((str) => ResistedEvent.fromJson(jsonDecode(str)))
-        .toList();
-  }
+  // // --- Resisted Event Methods ---
+  // Future<List<ResistedEvent>> getResistedEvents() async {
+  //   final prefs = await SharedPreferences.getInstance();
+  //   final eventsStringList =
+  //       prefs.getStringList(AppConstants.resistedEventsKey) ?? [];
+  //   return eventsStringList
+  //       .map((str) => ResistedEvent.fromJson(jsonDecode(str)))
+  //       .toList();
+  // }
 
-  Future<void> saveResistedEvents(List<ResistedEvent> events) async {
-    final prefs = await SharedPreferences.getInstance();
-    final eventsStringList =
-        events.map((event) => jsonEncode(event.toJson())).toList();
-    await prefs.setStringList(AppConstants.resistedEventsKey, eventsStringList);
-  }
+  // Future<void> saveResistedEvents(List<ResistedEvent> events) async {
+  //   final prefs = await SharedPreferences.getInstance();
+  //   final eventsStringList =
+  //       events.map((event) => jsonEncode(event.toJson())).toList();
+  //   await prefs.setStringList(AppConstants.resistedEventsKey, eventsStringList);
+  // }
 
   // --- Combined Savings and Averted Sticks Persistence ---
   Future<void> saveData({

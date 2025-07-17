@@ -224,11 +224,11 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: color.withAlpha(50),
+      color: color.withAlpha(30),
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: color.withAlpha(255), width: 2.0),
+        side: BorderSide(color: color.withAlpha(100), width: 1.0),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
