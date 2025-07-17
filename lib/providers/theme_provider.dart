@@ -8,31 +8,29 @@ class ThemeProvider with ChangeNotifier {
   static const _themeKey = 'app_theme';
   ThemeData _themeData;
 
-  ThemeProvider() : _themeData = AppThemes.original {
+  ThemeProvider() : _themeData = AppThemes.lightTheme {
+    // Set a default light theme
     _loadTheme();
   }
 
   ThemeData get themeData => _themeData;
   AppTheme get currentTheme {
-    if (_themeData == AppThemes.lightMonochrome) {
-      return AppTheme.lightMonochrome;
+    if (_themeData == AppThemes.darkTheme) {
+      // Check against the new dark theme
+      return AppTheme.dark;
     }
-    if (_themeData == AppThemes.darkNeon) {
-      return AppTheme.darkNeon;
-    }
-    return AppTheme.original;
+    return AppTheme.light; // Default to light
   }
 
   Future<void> _loadTheme() async {
     final prefs = await SharedPreferences.getInstance();
-    final themeName = prefs.getString(_themeKey) ?? AppTheme.original.name;
+    final themeName =
+        prefs.getString(_themeKey) ?? AppTheme.light.name; // Default to 'light'
 
-    if (themeName == AppTheme.lightMonochrome.name) {
-      _themeData = AppThemes.lightMonochrome;
-    } else if (themeName == AppTheme.darkNeon.name) {
-      _themeData = AppThemes.darkNeon;
+    if (themeName == AppTheme.dark.name) {
+      _themeData = AppThemes.darkTheme;
     } else {
-      _themeData = AppThemes.original;
+      _themeData = AppThemes.lightTheme;
     }
     notifyListeners();
   }
@@ -40,15 +38,12 @@ class ThemeProvider with ChangeNotifier {
   Future<void> setTheme(AppTheme theme) async {
     final prefs = await SharedPreferences.getInstance();
 
-    if (theme == AppTheme.lightMonochrome) {
-      _themeData = AppThemes.lightMonochrome;
-    } else if (theme == AppTheme.darkNeon) {
-      _themeData = AppThemes.darkNeon;
+    if (theme == AppTheme.dark) {
+      _themeData = AppThemes.darkTheme;
     } else {
-      _themeData = AppThemes.original;
+      _themeData = AppThemes.lightTheme;
     }
 
-    // CORRECTED: Changed '_key' to the correct constant '_themeKey'
     await prefs.setString(_themeKey, theme.name);
     notifyListeners();
   }

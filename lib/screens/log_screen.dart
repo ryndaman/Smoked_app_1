@@ -157,33 +157,24 @@ class _LogScreenState extends State<LogScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
+                      // Updated Light Theme Chip
                       _ThemeSelectionChip(
-                        theme: AppTheme.original,
-                        label: "Original",
+                        theme: AppTheme.light,
+                        label: "Light",
                         isSelected:
-                            themeProvider.currentTheme == AppTheme.original,
+                            themeProvider.currentTheme == AppTheme.light,
                         onTap: () {
-                          themeProvider.setTheme(AppTheme.original);
+                          themeProvider.setTheme(AppTheme.light);
                           setDialogState(() {});
                         },
                       ),
+                      // Updated Dark Theme Chip
                       _ThemeSelectionChip(
-                        theme: AppTheme.lightMonochrome,
-                        label: "Mono",
-                        isSelected: themeProvider.currentTheme ==
-                            AppTheme.lightMonochrome,
+                        theme: AppTheme.dark,
+                        label: "Dark",
+                        isSelected: themeProvider.currentTheme == AppTheme.dark,
                         onTap: () {
-                          themeProvider.setTheme(AppTheme.lightMonochrome);
-                          setDialogState(() {});
-                        },
-                      ),
-                      _ThemeSelectionChip(
-                        theme: AppTheme.darkNeon,
-                        label: "Neon",
-                        isSelected:
-                            themeProvider.currentTheme == AppTheme.darkNeon,
-                        onTap: () {
-                          themeProvider.setTheme(AppTheme.darkNeon);
+                          themeProvider.setTheme(AppTheme.dark);
                           setDialogState(() {});
                         },
                       ),
@@ -350,14 +341,11 @@ class _ThemeSelectionChip extends StatelessWidget {
   Widget build(BuildContext context) {
     ThemeData themeData;
     switch (theme) {
-      case AppTheme.lightMonochrome:
-        themeData = AppThemes.lightMonochrome;
-        break;
-      case AppTheme.darkNeon:
-        themeData = AppThemes.darkNeon;
+      case AppTheme.dark:
+        themeData = AppThemes.darkTheme; // Use new darkTheme
         break;
       default:
-        themeData = AppThemes.original;
+        themeData = AppThemes.lightTheme; // Use new lightTheme as default
     }
 
     return GestureDetector(
