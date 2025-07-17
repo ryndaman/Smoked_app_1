@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:smoked_1/providers/smoke_data_provider.dart';
 
-// MODIFIED: Converted to a StatefulWidget to manage its own timer.
 class SinceLastSmokeTimer extends StatefulWidget {
   const SinceLastSmokeTimer({super.key});
 
@@ -19,7 +18,6 @@ class _SinceLastSmokeTimerState extends State<SinceLastSmokeTimer> {
   @override
   void initState() {
     super.initState();
-    // This timer will rebuild only this widget every second.
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
         setState(() {});
@@ -35,15 +33,12 @@ class _SinceLastSmokeTimerState extends State<SinceLastSmokeTimer> {
 
   @override
   Widget build(BuildContext context) {
-    // This widget now only needs to listen to the provider to get the start time.
     return Consumer<SmokeDataProvider>(
       builder: (context, dataProvider, child) {
-        final startTime = dataProvider.events.isNotEmpty
-            ? dataProvider.events.last.timestamp
-            : (dataProvider.events.isNotEmpty
-                ? dataProvider.events.first.timestamp
-                : DateTime.now());
+        // FIXED: Use the new, reliable getter for the latest event.
+        final lastSmokeEvent = dataProvider.latestSmokeEvent;
 
+        final startTime = lastSmokeEvent?.timestamp ?? DateTime.now();
         final duration = DateTime.now().difference(startTime);
 
         String twoDigits(int n) => n.toString().padLeft(2, '0');
@@ -52,7 +47,7 @@ class _SinceLastSmokeTimerState extends State<SinceLastSmokeTimer> {
         final minutes = twoDigits(duration.inMinutes.remainder(60));
         final seconds = twoDigits(duration.inSeconds.remainder(60));
         final formattedTime = "$days : $hours : $minutes : $seconds";
-        final subtitle = dataProvider.events.isNotEmpty
+        final subtitle = lastSmokeEvent != null
             ? "since your last smoke"
             : "since you started";
 

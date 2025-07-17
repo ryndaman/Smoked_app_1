@@ -8,7 +8,6 @@ import 'package:share_plus/share_plus.dart';
 import 'package:smoked_1/models/equivalent_item.dart';
 import 'package:smoked_1/providers/smoke_data_provider.dart';
 import 'package:smoked_1/services/local_storage_service.dart';
-// FIXED: Corrected import path
 import 'package:smoked_1/widgets/achievements_section.dart';
 import 'package:smoked_1/widgets/daily_line_chart.dart';
 import 'package:smoked_1/widgets/hourly_line_chart.dart';
@@ -100,13 +99,12 @@ class _SummaryScreenState extends State<SummaryScreen> {
         EquivalentItem equivalentItem = const EquivalentItem(
             name: 'small stones...', price: 0, iconIdentifier: 'stone');
 
+        // FIXED: Corrected logic to find the highest-value item user can afford.
         if (dataProvider.equivalents.isNotEmpty) {
-          for (var item in dataProvider.equivalents.reversed) {
-            if (totalCostInPreferredCurrency >= item.price) {
-              equivalentItem = item;
-              break;
-            }
-          }
+          equivalentItem = dataProvider.equivalents.lastWhere(
+              (item) => totalCostInPreferredCurrency >= item.price,
+              orElse: () => const EquivalentItem(
+                  name: 'small stones...', price: 0, iconIdentifier: 'stone'));
         }
 
         final formatter = NumberFormat.currency(
@@ -255,7 +253,6 @@ class _SummaryScreenState extends State<SummaryScreen> {
                     : const HourlyLineChart(),
               ),
               const SizedBox(height: 16),
-              // FIXED: Corrected widget name
               const AchievementsSection(),
               const SizedBox(height: 16),
               Card(

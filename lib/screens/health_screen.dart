@@ -7,11 +7,9 @@ import 'package:provider/provider.dart';
 import 'package:smoked_1/models/health_milestone.dart';
 import 'package:smoked_1/providers/smoke_data_provider.dart';
 
-// MODIFIED: Converted to a StatelessWidget as the timer logic is now in the card.
 class HealthScreen extends StatelessWidget {
   const HealthScreen({super.key});
 
-  // Helper to map string identifiers to actual FontAwesome icons
   IconData _getIconForIdentifier(String identifier) {
     switch (identifier) {
       case 'heart.pulse':
@@ -53,7 +51,10 @@ class HealthScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (dataProvider.events.isEmpty) {
+          // FIXED: Use the new, reliable getter for the latest event.
+          final lastSmokeEvent = dataProvider.latestSmokeEvent;
+
+          if (lastSmokeEvent == null) {
             return const Center(
               child: Padding(
                 padding: EdgeInsets.all(24.0),
@@ -75,9 +76,9 @@ class HealthScreen extends StatelessWidget {
                   ? Duration.zero
                   : dataProvider.healthMilestones[index - 1].duration;
 
-              // Each card is now an independent, stateful widget.
               return _HealthMilestoneCard(
                 milestone: milestone,
+                lastSmokeEventTimestamp: lastSmokeEvent.timestamp,
                 getIconForIdentifier: _getIconForIdentifier,
                 previousMilestoneDuration: previousMilestoneDuration,
               );
@@ -89,14 +90,15 @@ class HealthScreen extends StatelessWidget {
   }
 }
 
-// NEW WIDGET: A dedicated StatefulWidget for each milestone card.
 class _HealthMilestoneCard extends StatefulWidget {
   final HealthMilestone milestone;
+  final DateTime lastSmokeEventTimestamp;
   final Duration previousMilestoneDuration;
   final IconData Function(String) getIconForIdentifier;
 
   const _HealthMilestoneCard({
     required this.milestone,
+    required this.lastSmokeEventTimestamp,
     required this.previousMilestoneDuration,
     required this.getIconForIdentifier,
   });
@@ -111,7 +113,6 @@ class _HealthMilestoneCardState extends State<_HealthMilestoneCard> {
   @override
   void initState() {
     super.initState();
-    // This timer will only rebuild this specific card.
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
         setState(() {});
@@ -127,18 +128,14 @@ class _HealthMilestoneCardState extends State<_HealthMilestoneCard> {
 
   @override
   Widget build(BuildContext context) {
-    // We only need to listen for the last smoke event here.
-    final dataProvider = Provider.of<SmokeDataProvider>(context, listen: false);
-    final lastSmokeEvent = dataProvider.events.last;
     final timeSinceLastSmoke =
-        DateTime.now().difference(lastSmokeEvent.timestamp);
+        DateTime.now().difference(widget.lastSmokeEventTimestamp);
 
     final bool isAchieved = timeSinceLastSmoke >= widget.milestone.duration;
     double progress = 0.0;
 
     if (isAchieved) {
       progress = 1.0;
-      // If the milestone is achieved, we can cancel the timer for this card.
       _timer?.cancel();
     } else {
       final Duration totalDurationForThisMilestone =

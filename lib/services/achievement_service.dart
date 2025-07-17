@@ -11,11 +11,10 @@ class AchievementService {
   }) {
     final List<Achievement> newlyUnlocked = [];
 
-    final timeSinceLastSmokeInHours = dataProvider.events.isNotEmpty
-        ? DateTime.now()
-            .difference(dataProvider.events.last.timestamp)
-            .inHours
-            .toDouble()
+    // FIXED: Use the reliable getter to ensure we're checking against the actual latest event.
+    final latestEvent = dataProvider.latestSmokeEvent;
+    final timeSinceLastSmokeInHours = latestEvent != null
+        ? DateTime.now().difference(latestEvent.timestamp).inHours.toDouble()
         : 0.0;
 
     final totalSavings = dataProvider.dailySavings +
@@ -28,7 +27,6 @@ class AchievementService {
       }
 
       bool isUnlocked = false;
-      // FIXED: Switch statement is now exhaustive and uses the correct enum types.
       switch (achievement.type) {
         case AchievementType.time:
           if (timeSinceLastSmokeInHours >= achievement.threshold) {
