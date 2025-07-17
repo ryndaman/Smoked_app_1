@@ -39,12 +39,12 @@ class _FinancialInfoState extends State<FinancialInfo> {
 
         // MODIFIED: The entire widget is now wrapped in a styled Container to create the frame
         return Container(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(12.0),
             decoration: BoxDecoration(
               color: Theme.of(context)
                   .colorScheme
                   .secondary
-                  .withAlpha(50), // Darker background frame
+                  .withAlpha(30), // Darker background frame
               borderRadius: BorderRadius.circular(16),
             ),
             child: Column(
@@ -57,7 +57,7 @@ class _FinancialInfoState extends State<FinancialInfo> {
                             .onSurface, // Use a readable color on the frame
                       ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -66,7 +66,7 @@ class _FinancialInfoState extends State<FinancialInfo> {
                     Expanded(
                       child: Column(
                         children: [
-                          Text("Saved",
+                          Text("Money saved",
                               style: TextStyle(
                                   color: Theme.of(context)
                                       .textTheme
@@ -114,7 +114,7 @@ class _FinancialInfoState extends State<FinancialInfo> {
                     Expanded(
                       child: Column(
                         children: [
-                          Text("Turned to smoke",
+                          Text("Money turned to smoke",
                               style: TextStyle(
                                   color: Theme.of(context)
                                       .textTheme
@@ -211,11 +211,11 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: color.withAlpha(25),
+      color: color.withAlpha(50),
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: color.withAlpha(50)),
+        side: BorderSide(color: color.withAlpha(255), width: 2.0),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
@@ -244,7 +244,7 @@ class _StatCard extends StatelessWidget {
               child: Text(
                 subtitle,
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 10, color: color.withAlpha(200)),
+                style: TextStyle(fontSize: 12, color: color.withAlpha(255)),
               ),
             ),
           ],
