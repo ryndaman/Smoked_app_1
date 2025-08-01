@@ -22,8 +22,8 @@ class _ActionButtonCarouselState extends State<ActionButtonCarousel> {
   void initState() {
     super.initState();
     _pageController = PageController(
-      initialPage: 1, // Start with the middle button
-      viewportFraction: 0.6, // Show parts of adjacent pages
+      initialPage: 0,
+      viewportFraction: 0.6,
     );
   }
 
@@ -33,7 +33,28 @@ class _ActionButtonCarouselState extends State<ActionButtonCarousel> {
     super.dispose();
   }
 
-  // NEW: Method to show the coping options dialog.
+  // void _showSetGoalModal(BuildContext context) {
+  //   showModalBottomSheet(
+  //     context: context,
+  //     isScrollControlled: true,
+  //     builder: (context) {
+  //       return Padding(
+  //         padding:
+  //             EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+  //         child: Container(
+  //             decoration: BoxDecoration(
+  //               color: Theme.of(context).cardColor,
+  //               borderRadius: const BorderRadius.only(
+  //                 topLeft: Radius.circular(24.0),
+  //                 topRight: Radius.circular(24.0),
+  //               ),
+  //             ),
+  //             child: const SetLimitScreen()),
+  //       );
+  //     },
+  //   );
+  // }
+
   void _showCopingOptions(BuildContext context) {
     showDialog(
       context: context,
@@ -45,7 +66,7 @@ class _ActionButtonCarouselState extends State<ActionButtonCarousel> {
             TextButton(
               child: const Text("Breathing Exercise"),
               onPressed: () {
-                Navigator.of(dialogContext).pop(); // Close the dialog
+                Navigator.of(dialogContext).pop();
                 Navigator.of(context).push(
                   MaterialPageRoute(
                       builder: (context) => const BreathingExerciseScreen()),
@@ -56,7 +77,7 @@ class _ActionButtonCarouselState extends State<ActionButtonCarousel> {
               child: const Text("Get a Quick Tip"),
               onPressed: () {
                 final tip = CopingTipsData.getRandomTip();
-                Navigator.of(dialogContext).pop(); // Close the dialog
+                Navigator.of(dialogContext).pop();
                 Navigator.of(context).push(
                   MaterialPageRoute(
                       builder: (context) => CopingTipScreen(tip: tip)),
@@ -71,69 +92,97 @@ class _ActionButtonCarouselState extends State<ActionButtonCarousel> {
 
   @override
   Widget build(BuildContext context) {
-    final dataProvider = Provider.of<SmokeDataProvider>(context, listen: false);
+    return Consumer<SmokeDataProvider>(builder: (context, dataProvider, child) {
+      final dailyGoal = dataProvider.settings.dailyLimit;
+      final String counterText = dailyGoal != null
+          ? "(${dataProvider.cigsSmokedToday}/$dailyGoal)"
+          : "(Set Limit)";
 
-    final List<Widget> actionButtons = [
-      _ActionButton(
-        label: "I smoked one",
-        color: Colors.red,
-        onPressed: () {
-          dataProvider.logSmokeEvent();
-        },
-      ),
-      // --- Help Me Button ---
-      _ActionButton(
-        label: "Ride the Wave",
-        subtitle: Text("this will pass", style: TextStyle(fontSize: 12.0)),
-        color: Colors.lightBlue,
-        onPressed: () {
-          _showCopingOptions(context); // MODIFIED: Show dialog on press
-        },
-      ),
-    ];
-
-    return SizedBox(
-      height: 200, // Provide a fixed height for the carousel
-      child: PageView.builder(
-        controller: _pageController,
-        itemCount: actionButtons.length,
-        itemBuilder: (context, index) {
-          return AnimatedBuilder(
-            animation: _pageController,
-            builder: (context, child) {
-              double value = 1.0;
-              if (_pageController.position.haveDimensions) {
-                value = _pageController.page! - index;
-                value = (1 - (value.abs() * 0.4)).clamp(0.0, 1.0);
-              }
-              return Center(
-                child: Opacity(
-                  opacity: pow(value, 2).toDouble(),
-                  child: Transform.scale(
-                    scale: value,
-                    child: child,
-                  ),
+      final List<Widget> actionButtons = [
+        _ActionButton(
+          label: "I smoked one",
+          subtitle: dailyGoal != null ? "Your Limit:" : null,
+          // Counter Customization
+          counter: GestureDetector(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                counterText,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: dailyGoal != null ? 22 : 12,
+                  fontFamily: 'monospace',
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  decoration: dailyGoal != null
+                      ? TextDecoration.none
+                      : TextDecoration.none,
+                  decorationColor: Colors.white70,
+                  decorationThickness: 2,
                 ),
-              );
-            },
-            child: actionButtons[index],
-          );
-        },
-      ),
-    );
+              ),
+            ),
+          ),
+          color: Colors.red,
+          onPressed: () {
+            dataProvider.logSmokeEvent();
+          },
+        ),
+        _ActionButton(
+          label: "Ride the Wave",
+          subtitle: "This moment will pass",
+          color: Colors.lightBlue,
+          onPressed: () {
+            _showCopingOptions(context);
+          },
+        ),
+      ];
+
+      return SizedBox(
+        height: 200,
+        child: PageView.builder(
+          controller: _pageController,
+          itemCount: actionButtons.length,
+          itemBuilder: (context, index) {
+            return AnimatedBuilder(
+              animation: _pageController,
+              builder: (context, child) {
+                double value = 1.0;
+                if (_pageController.position.haveDimensions) {
+                  value = (_pageController.page! - index).abs();
+                  value = (1 - (value * 0.4)).clamp(0.0, 1.0);
+                }
+                return Center(
+                  child: Opacity(
+                    opacity: pow(value, 2).toDouble(),
+                    child: Transform.scale(
+                      scale: value,
+                      child: child,
+                    ),
+                  ),
+                );
+              },
+              child: actionButtons[index],
+            );
+          },
+        ),
+      );
+    });
   }
 }
 
-// Helper widget for the individual circular buttons
+// REVISED: The helper widget now accepts a Widget for the counter.
 class _ActionButton extends StatelessWidget {
   final String label;
-  final Text? subtitle;
+  final String? subtitle;
+  final Widget? counter;
   final Color color;
   final VoidCallback onPressed;
 
   const _ActionButton({
     required this.label,
     this.subtitle,
+    this.counter,
     required this.color,
     required this.onPressed,
   });
@@ -149,13 +198,12 @@ class _ActionButton extends StatelessWidget {
             backgroundColor: color,
             foregroundColor: Colors.white,
             shape: const CircleBorder(),
-            elevation: 8,
+            elevation: 10,
             shadowColor: color.withAlpha(100),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const SizedBox(height: 8),
               Text(
                 label,
                 textAlign: TextAlign.center,
@@ -165,8 +213,17 @@ class _ActionButton extends StatelessWidget {
                 ),
               ),
               if (subtitle != null) ...[
-                const SizedBox(height: 2),
-                subtitle!,
+                const SizedBox(height: 0),
+                Text(
+                  subtitle!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ],
+              if (counter != null) ...[
+                const SizedBox(height: 0),
+                // render counter widget --
+                counter!,
               ],
             ],
           ),

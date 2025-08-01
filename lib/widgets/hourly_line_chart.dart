@@ -5,14 +5,13 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:smoked_1/providers/smoke_data_provider.dart';
+import 'package:smoked_1/models/smoke_event.dart';
 
 class HourlyLineChart extends StatelessWidget {
-  // MODIFIED: The events list is no longer needed as we use the provider directly.
   const HourlyLineChart({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // MODIFIED: Wrapped in a Consumer to get data from the provider.
     return Consumer<SmokeDataProvider>(
       builder: (context, dataProvider, child) {
         return Column(
@@ -20,12 +19,12 @@ class HourlyLineChart extends StatelessWidget {
           children: [
             Expanded(
               child: LineChart(
-                _buildChartData(context, dataProvider.baselineHourlyMap),
+                _buildChartData(context, dataProvider.events),
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              "*Chart shows your self-reported baseline consumption pattern per 2-hour block.",
+              "*Chart shows your average hourly smoking pattern from the last 7 days.",
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 10,
@@ -40,31 +39,54 @@ class HourlyLineChart extends StatelessWidget {
   }
 
   LineChartData _buildChartData(
-      BuildContext context, Map<int, double> baselineHourlyMap) {
-    // Process the baseline map into 2-hour bins
+      BuildContext context, List<SmokeEvent> allEvents) {
+    final now = DateTime.now();
+    final sevenDaysAgo = now.subtract(const Duration(days: 7));
+    final recentEvents = allEvents.where((event) {
+      return event.timestamp.isAfter(sevenDaysAgo);
+    }).toList();
+
+    //aggregate total cigarettes smoked for each hour
+    final Map<int, int> hourlyTotals = {for (var i = 0; i < 24; i++) i: 0};
+    for (final event in recentEvents) {
+      final hour = event.timestamp.hour;
+      hourlyTotals[hour] = (hourlyTotals[hour] ?? 0) + 1;
+    }
+
+    //Calculate the daily average for each hour
+    final Map<int, double> hourlyAverages = {
+      for (var i = 0; i < 24; i++) i: 0.0
+    };
+    hourlyTotals.forEach((hour, total) {
+      hourlyAverages[hour] = total / 7;
+    });
+
+    //process the hourly averages into 2-hour bins
     final Map<int, double> twoHourBinTotals = {
       for (var i = 0; i < 12; i++) i: 0.0
     };
 
-    baselineHourlyMap.forEach((hour, count) {
+    hourlyAverages.forEach((hour, average) {
       final int binIndex = hour ~/ 2;
-      twoHourBinTotals[binIndex] = (twoHourBinTotals[binIndex] ?? 0) + count;
+      twoHourBinTotals[binIndex] = (twoHourBinTotals[binIndex] ?? 0) + average;
     });
 
+    //Convert binned data into FlSpot objects for the chart
     double maxAverage = 0;
     final List<FlSpot> spots = twoHourBinTotals.entries.map((entry) {
-      final double average = entry.value; // It's a baseline, not an average
+      final double average = entry.value;
       if (average > maxAverage) {
         maxAverage = average;
       }
       return FlSpot((entry.key * 2).toDouble(), average);
     }).toList();
 
-    // ADDED: Add a looping point to connect the end back to the start
+    // Add a looping point to connect the end back to the start
     if (spots.isNotEmpty) {
       spots.add(FlSpot(24, spots.first.y));
     }
 
+    // configure the final linechartdata for rendering
     return LineChartData(
       lineTouchData: LineTouchData(
         handleBuiltInTouches: true,
@@ -134,14 +156,12 @@ class HourlyLineChart extends StatelessWidget {
             getTitlesWidget: (value, meta) {
               final hour = value.toInt();
               String timeText;
-              // MODIFIED: Handle the 24h mark to display 12AM correctly
               if (hour == 24) {
                 timeText = "12AM";
               } else {
                 final time = DateTime(2023, 1, 1, hour);
                 timeText = DateFormat('ha').format(time);
               }
-
               return SideTitleWidget(
                 meta: meta,
                 space: 4.0,
@@ -160,9 +180,9 @@ class HourlyLineChart extends StatelessWidget {
       ),
       borderData: FlBorderData(show: false),
       minX: 0,
-      maxX: 24, // MODIFIED: Changed from 22 to 24 to show the full loop
+      maxX: 24,
       minY: 0,
-      maxY: maxAverage == 0 ? 5 : (maxAverage.ceil() + 1).toDouble(),
+      maxY: maxAverage == 0 ? 1 : (maxAverage.ceil() + 1).toDouble(),
       lineBarsData: [
         LineChartBarData(
           spots: spots,

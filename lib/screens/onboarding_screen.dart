@@ -1,7 +1,9 @@
 // lib/screens/onboarding_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:smoked_1/models/user_settings.dart';
+import 'package:smoked_1/providers/smoke_data_provider.dart';
 import 'package:smoked_1/services/local_storage_service.dart';
 import 'package:smoked_1/screens/home_page.dart';
 import 'package:smoked_1/utils/constants.dart';
@@ -48,7 +50,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   void _finishOnboarding() async {
     // Final save operation
-    final newBaselineCigs = int.tryParse(_baselineCigsController.text) ??
+    final baselineValue = int.tryParse(_baselineCigsController.text) ??
         AppConstants.defaultCigsPerPack;
     final newPrice =
         int.tryParse(_priceController.text) ?? AppConstants.defaultPricePerPack;
@@ -59,8 +61,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       pricePerPack: newPrice,
       cigsPerPack: newCigsPerPack,
       preferredCurrency: _selectedCurrency,
-      baselineCigsPerDay: newBaselineCigs,
       smokingTimes: _selectedTimes.toList(),
+      historicalAverage: baselineValue,
     ));
 
     await _storageService.setOnboarded();
@@ -96,50 +98,66 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // final dataProvider = Provider.of<SmokeDataProvider>(context, listen: false);
     return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              // MODIFIED: Wrapped PageView in a Stack to overlay arrows
-              child: Stack(
-                children: [
-                  PageView(
-                    controller: _pageController,
-                    // MODIFIED: Swiping is now enabled by removing the physics property.
-                    onPageChanged: (page) {
-                      setState(() {
-                        _currentPage = page;
-                      });
-                    },
+      body: Consumer<SmokeDataProvider>(
+        builder: (context, dataProvider, child) {
+          if (dataProvider.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final currencyOptions = dataProvider.exchangeRates.keys.toList();
+
+          if (!currencyOptions.contains(_selectedCurrency)) {
+            _selectedCurrency =
+                currencyOptions.isNotEmpty ? currencyOptions.first : 'USD';
+          }
+
+          return SafeArea(
+            child: Column(
+              children: [
+                Expanded(
+                  // MODIFIED: Wrapped PageView in a Stack to overlay arrows
+                  child: Stack(
                     children: [
-                      _buildBaselinePage(),
-                      _buildTriggersPage(),
+                      PageView(
+                        controller: _pageController,
+                        // MODIFIED: Swiping is now enabled by removing the physics property.
+                        onPageChanged: (page) {
+                          setState(() {
+                            _currentPage = page;
+                          });
+                        },
+                        children: [
+                          _buildBaselinePage(currencyOptions),
+                          _buildTriggersPage(),
+                        ],
+                      ),
+                      // ADDED: Left arrow for navigation
+                      if (_currentPage > 0)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: IconButton(
+                            icon: const Icon(Icons.arrow_back_ios),
+                            onPressed: _previousPage,
+                            iconSize: 40,
+                            color: Colors.grey.withAlpha(128),
+                          ),
+                        ),
                     ],
                   ),
-                  // ADDED: Left arrow for navigation
-                  if (_currentPage > 0)
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: IconButton(
-                        icon: const Icon(Icons.arrow_back_ios),
-                        onPressed: _previousPage,
-                        iconSize: 40,
-                        color: Colors.grey.withAlpha(128),
-                      ),
-                    ),
-                ],
-              ),
+                ),
+                _buildNavigationControls(),
+              ],
             ),
-            _buildNavigationControls(),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 
   // STAGE 1: The Numbers
-  Widget _buildBaselinePage() {
+  Widget _buildBaselinePage(List<String> currencyOptions) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(32.0),
       child: Form(
@@ -227,10 +245,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       labelText: 'Currency',
                       border: OutlineInputBorder(),
                     ),
-                    items: UserSettings()
-                        .exchangeRates
-                        .keys
-                        .map((String currency) {
+                    items: currencyOptions.map((String currency) {
                       return DropdownMenuItem<String>(
                         value: currency,
                         child: Text(currency),

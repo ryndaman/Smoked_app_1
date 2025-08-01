@@ -1,12 +1,9 @@
 // lib/data/achievement_data.dart
 
-// FIXED: Removed duplicate class/enum definitions. Now importing the canonical models.
 import 'package:smoked_1/models/achievement.dart';
 
 class AchievementData {
-  // The list now correctly uses the imported Achievement model and AchievementType enum.
   static final List<Achievement> allAchievements = [
-    // Time-based Achievements (threshold is in hours)
     const Achievement(
       id: 'time_24h',
       title: 'Day One Done',
@@ -21,9 +18,8 @@ class AchievementData {
       description: 'You have been smoke-free for a full week.',
       iconIdentifier: 'calendar.week',
       type: AchievementType.time,
-      threshold: 168, // 7 days * 24 hours
+      threshold: 168,
     ),
-    // Count-based Achievements
     const Achievement(
       id: 'count_1',
       title: 'The First Step',
@@ -40,14 +36,14 @@ class AchievementData {
       type: AchievementType.count,
       threshold: 100,
     ),
-    // Savings-based Achievements (based on total cost in base currency - USD)
+    // FIXED: Corrected enum usage
     const Achievement(
       id: 'savings_5',
       title: 'Coffee Money',
       description: 'You\'ve saved enough for a fancy coffee!',
       iconIdentifier: 'mug.saucer',
       type: AchievementType.savings,
-      threshold: 3.5, // Approx. $3.50 USD
+      threshold: 3.5,
     ),
     const Achievement(
       id: 'savings_50',
@@ -55,9 +51,8 @@ class AchievementData {
       description: 'You\'ve saved enough for a new video game.',
       iconIdentifier: 'gamepad',
       type: AchievementType.savings,
-      threshold: 50, // Approx. $50 USD
+      threshold: 50,
     ),
-    // Reduction-based Achievements
     const Achievement(
       id: 'reduction_1_day',
       title: 'A Better Day',
@@ -65,7 +60,7 @@ class AchievementData {
           'You smoked less than your daily average for the first time!',
       iconIdentifier: 'sun',
       type: AchievementType.reduction,
-      threshold: 1, // Represents 1 full day of smoking less
+      threshold: 1,
     ),
     const Achievement(
       id: 'reduction_7_days',
@@ -74,7 +69,7 @@ class AchievementData {
           'You smoked less than your daily average for 7 days in a row!',
       iconIdentifier: 'calendar.check',
       type: AchievementType.reduction,
-      threshold: 7, // Represents 7 consecutive days
+      threshold: 7,
     ),
     const Achievement(
       id: 'savings_25_total',

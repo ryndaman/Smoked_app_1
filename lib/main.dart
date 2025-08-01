@@ -41,7 +41,6 @@ class SmokedApp extends StatelessWidget {
   }
 }
 
-// ... (AppInitializer remains the same)
 class AppInitializer extends StatefulWidget {
   const AppInitializer({super.key});
 

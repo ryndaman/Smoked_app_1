@@ -90,7 +90,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
         }
 
         final settings = dataProvider.settings;
-        final rate = settings.exchangeRates[settings.preferredCurrency] ?? 1.0;
+        final rate =
+            dataProvider.exchangeRates[settings.preferredCurrency] ?? 1.0;
 
         final totalCostInBase = dataProvider.events
             .fold(0.0, (sum, event) => sum + event.pricePerStick);
@@ -102,7 +103,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
         // FIXED: Corrected logic to find the highest-value item user can afford.
         if (dataProvider.equivalents.isNotEmpty) {
           equivalentItem = dataProvider.equivalents.lastWhere(
-              (item) => totalCostInPreferredCurrency >= item.price,
+              (item) => totalCostInBase >= item.price,
               orElse: () => const EquivalentItem(
                   name: 'small stones...', price: 0, iconIdentifier: 'stone'));
         }

@@ -3,7 +3,7 @@
 // Enum to categorize the different types of achievements
 enum AchievementType {
   time, // Based on duration since last smoke
-  savings, // Based on total money saved
+  savings,
   count, // Based on total number of cigarettes logged
   reduction, // ADDED: Based on smoking less than the baseline
 }

@@ -1,13 +1,11 @@
 // lib/screens/log_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:smoked_1/models/achievement.dart';
-import 'package:smoked_1/models/user_settings.dart';
 import 'package:smoked_1/providers/smoke_data_provider.dart';
 import 'package:smoked_1/providers/theme_provider.dart';
+import 'package:smoked_1/screens/set_goal_screen.dart';
 import 'package:smoked_1/utils/app_themes.dart';
 import 'package:smoked_1/widgets/financial_info_widget.dart';
 import 'package:smoked_1/widgets/action_button_carousel.dart';
@@ -21,22 +19,6 @@ class LogScreen extends StatefulWidget {
 }
 
 class _LogScreenState extends State<LogScreen> {
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final dataProvider = Provider.of<SmokeDataProvider>(context);
-
-    if (dataProvider.newlyUnlockedAchievements.isNotEmpty) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _showAchievementDialog(
-              context, dataProvider.newlyUnlockedAchievements);
-          dataProvider.clearNewlyUnlockedAchievements();
-        }
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Consumer<SmokeDataProvider>(
@@ -66,6 +48,13 @@ class _LogScreenState extends State<LogScreen> {
                   onPressed: () => _showManualEntryDialog(dataProvider),
                 ),
               ),
+              Tooltip(
+                message: 'Set Daily Limit',
+                child: IconButton(
+                  icon: const Icon(Icons.assignment),
+                  onPressed: () => _showSetGoalScreen(context),
+                ),
+              )
             ],
           ),
           body: SingleChildScrollView(
@@ -92,49 +81,23 @@ class _LogScreenState extends State<LogScreen> {
 
   // --- Dialogs ---
 
-  void _showAchievementDialog(
-      BuildContext context, List<Achievement> achievements) {
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(achievements.length > 1
-              ? "Achievements Unlocked!"
-              : "Achievement Unlocked!"),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: achievements
-                  .map((ach) => ListTile(
-                        leading: FaIcon(
-                            _getIconForIdentifier(ach.iconIdentifier),
-                            color: Theme.of(context).colorScheme.primary),
-                        title: Text(ach.title,
-                            style:
-                                const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text(ach.description),
-                      ))
-                  .toList(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text("Awesome!"),
-            ),
-          ],
-        );
-      },
-    );
+  void _showSetGoalScreen(BuildContext context) {
+    showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        builder: (context) {
+          return SetLimitScreen();
+        });
   }
 
   void _showSettingsDialog(SmokeDataProvider dataProvider) {
     final priceController = TextEditingController(
-        text: dataProvider.settings.pricePerPack.toString());
+        text: dataProvider.settings.pricePerPack.toString()); //dispose??
     final cigsController = TextEditingController(
         text: dataProvider.settings.cigsPerPack.toString());
-    final baselineCigsController = TextEditingController(
-        text: dataProvider.settings.baselineCigsPerDay.toString());
+    final historicalAverageController = TextEditingController(
+        text: dataProvider.settings.historicalAverage.toString());
+
     String selectedCurrency = dataProvider.settings.preferredCurrency;
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
 
@@ -184,8 +147,8 @@ class _LogScreenState extends State<LogScreen> {
                   DropdownButtonFormField<String>(
                     value: selectedCurrency,
                     decoration: const InputDecoration(labelText: 'Currency'),
-                    items: dataProvider.settings.exchangeRates.keys
-                        .map((String currency) {
+                    items:
+                        dataProvider.exchangeRates.keys.map((String currency) {
                       return DropdownMenuItem<String>(
                         value: currency,
                         child: Text(currency),
@@ -199,9 +162,9 @@ class _LogScreenState extends State<LogScreen> {
                   ),
                   const SizedBox(height: 16),
                   TextField(
-                      controller: baselineCigsController,
+                      controller: historicalAverageController,
                       decoration: const InputDecoration(
-                          labelText: 'Avg. Cigarettes Per Day (Baseline)'),
+                          labelText: 'Historical Avg. Cigs/Day'),
                       keyboardType: TextInputType.number),
                   TextField(
                       controller: priceController,
@@ -220,25 +183,20 @@ class _LogScreenState extends State<LogScreen> {
               ElevatedButton(
                 child: const Text('Save'),
                 onPressed: () async {
-                  final newPrice = int.tryParse(priceController.text) ??
-                      dataProvider.settings.pricePerPack;
-                  final newCigs = int.tryParse(cigsController.text) ??
-                      dataProvider.settings.cigsPerPack;
-                  final newBaseline =
-                      int.tryParse(baselineCigsController.text) ??
-                          dataProvider.settings.baselineCigsPerDay;
-
-                  final navigator = Navigator.of(dialogContext);
-
-                  await dataProvider.updateSettings(UserSettings(
-                    pricePerPack: newPrice,
-                    cigsPerPack: newCigs,
+                  // REVISED: The dailyGoal is no longer part of this dialog.
+                  final newSettings = dataProvider.settings.copyWith(
+                    pricePerPack: int.tryParse(priceController.text),
+                    cigsPerPack: int.tryParse(cigsController.text),
+                    historicalAverage:
+                        int.tryParse(historicalAverageController.text),
                     preferredCurrency: selectedCurrency,
-                    baselineCigsPerDay: newBaseline,
-                    smokingTimes: dataProvider.settings.smokingTimes,
-                  ));
+                  );
 
-                  navigator.pop();
+                  await dataProvider.updateSettings(newSettings);
+
+                  if (dialogContext.mounted) {
+                    Navigator.of(dialogContext).pop();
+                  }
                 },
               ),
             ],
@@ -294,32 +252,6 @@ class _LogScreenState extends State<LogScreen> {
         ],
       ),
     );
-  }
-
-  IconData _getIconForIdentifier(String identifier) {
-    switch (identifier) {
-      case 'hourglass.start':
-        return FontAwesomeIcons.hourglassStart;
-      case 'calendar.week':
-        return FontAwesomeIcons.calendarWeek;
-      case 'shoe.prints':
-        return FontAwesomeIcons.shoePrints;
-      case 'list.ol':
-        return FontAwesomeIcons.listOl;
-      case 'mug.saucer':
-        return FontAwesomeIcons.mugSaucer;
-      case 'gamepad':
-        return FontAwesomeIcons.gamepad;
-      case 'sun':
-        return FontAwesomeIcons.sun;
-      case 'calendar.check':
-        return FontAwesomeIcons.calendarCheck;
-      case 'piggy.bank':
-        return FontAwesomeIcons.piggyBank;
-      default:
-        // FIXED: Corrected deprecated icon name
-        return FontAwesomeIcons.circleQuestion;
-    }
   }
 }
 

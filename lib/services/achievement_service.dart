@@ -17,9 +17,8 @@ class AchievementService {
         ? DateTime.now().difference(latestEvent.timestamp).inHours.toDouble()
         : 0.0;
 
-    final totalSavings = dataProvider.dailySavings +
-        dataProvider.weeklyNetSavings +
-        dataProvider.monthlyNetSavings;
+    final totalSavings =
+        dataProvider.weeklyNetSavings + dataProvider.monthlyNetSavings;
 
     for (final achievement in AchievementData.allAchievements) {
       if (previouslyUnlockedIds.contains(achievement.id)) {

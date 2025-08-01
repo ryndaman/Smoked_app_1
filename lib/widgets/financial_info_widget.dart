@@ -15,10 +15,13 @@ class FinancialInfo extends StatefulWidget {
 }
 
 class _FinancialInfoState extends State<FinancialInfo> {
-  final PageController _savedPageController = PageController(initialPage: 5000);
-  final PageController _spentPageController = PageController(initialPage: 5000);
-  int _savedPageIndex = 5000;
-  int _spentPageIndex = 5000;
+  static const int _initialPage = 3000;
+  final PageController _savedPageController =
+      PageController(initialPage: _initialPage);
+  final PageController _spentPageController =
+      PageController(initialPage: _initialPage);
+  int _savedPageIndex = _initialPage;
+  int _spentPageIndex = _initialPage;
   final List<String> _periods = ['Today', 'Last 7-days', 'Last 30-days'];
   final _compactFormatter = NumberFormat.compact();
   // final List<String> _periods = ['Today', 'This Week', 'This Month'];
@@ -34,20 +37,14 @@ class _FinancialInfoState extends State<FinancialInfo> {
   Widget build(BuildContext context) {
     return Consumer<SmokeDataProvider>(
       builder: (context, dataProvider, child) {
-        final exchangeRate = dataProvider.settings
+        final exchangeRate = dataProvider
                 .exchangeRates[dataProvider.settings.preferredCurrency] ??
             1.0;
-
-        // FIXED: Data maps now point to the new, correct state variables
+// -- Variables --
         final savedAmounts = {
-          'Today': dataProvider.dailySavings,
+          'Today': dataProvider.dailyPotentialSavings,
           'Last 7-days': dataProvider.weeklyNetSavings,
           'Last 30-days': dataProvider.monthlyNetSavings,
-        };
-        final avertedSticks = {
-          'Today': dataProvider.dailyAvertedSticks.floor(),
-          'Last 7-days': dataProvider.weeklyAvertedSticks,
-          'Last 30-days': dataProvider.monthlyAvertedSticks,
         };
 
         return Container(
@@ -59,13 +56,14 @@ class _FinancialInfoState extends State<FinancialInfo> {
             child: Column(
               children: [
                 Text(
-                  "Overall Progress",
+                  "Financial Summary",
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurface,
                       ),
                 ),
                 const SizedBox(height: 4),
                 Row(
+                  // -- Saved Card & Wasted Card
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -86,7 +84,7 @@ class _FinancialInfoState extends State<FinancialInfo> {
                                   ))),
                           const SizedBox(height: 4),
                           SizedBox(
-                            height: 80,
+                            height: 90,
                             child: PageView.builder(
                               controller: _savedPageController,
                               itemCount: 10000,
@@ -95,12 +93,14 @@ class _FinancialInfoState extends State<FinancialInfo> {
                               itemBuilder: (context, index) {
                                 final period =
                                     _periods[index % _periods.length];
+                                final subtitle = period == 'Today'
+                                    ? 'Potential saving'
+                                    : 'Net savings';
                                 return _StatCard(
                                   formatter: widget.formatter,
                                   amount: (savedAmounts[period] ?? 0.0) *
                                       exchangeRate,
-                                  subtitle:
-                                      '${_compactFormatter.format(avertedSticks[period] ?? 0)} smoke(s) averted',
+                                  subtitle: subtitle,
                                   period: period,
                                   color: Colors.green[800]!,
                                 );
@@ -111,7 +111,7 @@ class _FinancialInfoState extends State<FinancialInfo> {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 12),
 
                     // --- WASTED CARD SECTION ---
                     Expanded(
@@ -131,7 +131,7 @@ class _FinancialInfoState extends State<FinancialInfo> {
                           ),
                           const SizedBox(height: 4),
                           SizedBox(
-                            height: 80,
+                            height: 90,
                             child: PageView.builder(
                               controller: _spentPageController,
                               itemCount: 10000,
@@ -149,13 +149,14 @@ class _FinancialInfoState extends State<FinancialInfo> {
                                         e.timestamp.day == now.day;
                                   }
                                   if (period == 'Last 7-days') {
-                                    final startOfWeek = now.subtract(
-                                        Duration(days: now.weekday - 1));
-                                    return e.timestamp.isAfter(startOfWeek);
+                                    final sevenDaysAgo =
+                                        now.subtract(const Duration(days: 7));
+                                    return e.timestamp.isAfter(sevenDaysAgo);
                                   }
                                   if (period == 'Last 30-days') {
-                                    return e.timestamp.year == now.year &&
-                                        e.timestamp.month == now.month;
+                                    final thirtyDaysAgo =
+                                        now.subtract(const Duration(days: 30));
+                                    return e.timestamp.isAfter(thirtyDaysAgo);
                                   }
                                   return false;
                                 }).toList();
@@ -223,41 +224,59 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // -- simplify thousands
+    String formattedAmount;
+    if (amount > 9999999) {
+      final thousands = amount / 1000;
+      // Uses the locale from the original formatter to ensure correct separators.
+      final thousandsFormatter = NumberFormat('#,##0', formatter.locale);
+      formattedAmount =
+          '${formatter.currencySymbol} ${thousandsFormatter.format(thousands)}K';
+    } else {
+      formattedAmount = formatter.format(amount);
+    }
+
+    // -- render statcard
     return Card(
-      color: color.withAlpha(30),
+      color: color.withAlpha(50),
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: color.withAlpha(100), width: 1.0),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+        padding: const EdgeInsets.all(6.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
               period,
               style: TextStyle(
                   fontSize: 12, color: color, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 2),
             Expanded(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
+              child: Center(
                 child: Text(
-                  formatter.format(amount),
+                  formattedAmount,
                   style: TextStyle(
+                    fontSize: 18,
                     fontWeight: FontWeight.w900,
                     color: color,
                   ),
                 ),
               ),
             ),
-            Flexible(
+            FittedBox(
+              fit: BoxFit.scaleDown,
               child: Text(
                 subtitle,
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: color.withAlpha(255)),
+                style: TextStyle(
+                    fontSize: 12,
+                    color: color.withAlpha(255),
+                    fontWeight: FontWeight.w600),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],

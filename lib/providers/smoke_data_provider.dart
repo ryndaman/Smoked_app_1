@@ -5,20 +5,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:csv/csv.dart';
 import 'package:smoked_1/data/health_data.dart';
-import 'package:smoked_1/models/achievement.dart';
 import 'package:smoked_1/models/equivalent_item.dart';
 import 'package:smoked_1/models/health_milestone.dart';
 import 'package:smoked_1/models/smoke_event.dart';
 import 'package:smoked_1/models/user_settings.dart';
 import 'package:smoked_1/services/achievement_service.dart';
 import 'package:smoked_1/services/local_storage_service.dart';
-import 'package:smoked_1/services/savings_service.dart';
 
 class SmokeDataProvider with ChangeNotifier {
   final LocalStorageService _storageService = LocalStorageService();
-  final SavingsService _savingsService = SavingsService();
   final AchievementService _achievementService = AchievementService();
-  Timer? _mainTimer;
 
   // --- State Properties ---
   bool _isLoading = true;
@@ -28,22 +24,21 @@ class SmokeDataProvider with ChangeNotifier {
   late List<HealthMilestone> _healthMilestones;
   String? dataLoadingError;
 
-  // --- V2 Savings & Averted Sticks State ---
-  double dailySavings = 0.0;
+  // --- Exchange rate
+  Map<String, double> _exchangeRates = const {};
+
+  // --- V2 Savings State ---
+  double dailyPotentialSavings = 0.0;
   double weeklyNetSavings = 0.0;
   double monthlyNetSavings = 0.0;
-  double dailyAvertedSticks = 0.0;
-  int weeklyAvertedSticks = 0;
-  int monthlyAvertedSticks = 0;
   late DateTime _lastRolloverTimestamp;
-  Map<int, double> _baselineHourlyMap = {};
 
   // --- Achievement State ---
   Set<String> unlockedAchievementIds = {};
-  List<Achievement> newlyUnlockedAchievements = [];
 
-  // --- NEW: Dedicated state for the latest smoke event ---
+  // --- Derived State ---
   SmokeEvent? _latestSmokeEvent;
+  int cigsSmokedToday = 0;
 
   // --- Getters ---
   bool get isLoading => _isLoading;
@@ -51,22 +46,24 @@ class SmokeDataProvider with ChangeNotifier {
   List<SmokeEvent> get events => _events;
   List<EquivalentItem> get equivalents => _equivalents;
   int get totalSticks => _events.length;
-  Map<int, double> get baselineHourlyMap => _baselineHourlyMap;
   List<HealthMilestone> get healthMilestones => _healthMilestones;
   SmokeEvent? get latestSmokeEvent => _latestSmokeEvent;
+  Map<String, double> get exchangeRates => _exchangeRates;
 
-  // --- Constructor & Dispose ---
+  // --- getter to handle price conversion
+  double get _pricePerStickInBaseCurrency {
+    if (_settings.cigsPerPack <= 0) return 0.0;
+    final priceInPreferredCurrency =
+        _settings.pricePerPack / _settings.cigsPerPack;
+    final rate = _exchangeRates[_settings.preferredCurrency] ?? 1.0;
+    if (rate == 0) return 0.0;
+    return priceInPreferredCurrency / rate;
+  }
+
   SmokeDataProvider() {
     loadInitialData();
   }
 
-  @override
-  void dispose() {
-    _mainTimer?.cancel();
-    super.dispose();
-  }
-
-  // --- Data Loading and Core Logic ---
   Future<void> loadInitialData() async {
     _isLoading = true;
     dataLoadingError = null;
@@ -74,32 +71,27 @@ class SmokeDataProvider with ChangeNotifier {
 
     try {
       final results = await Future.wait([
-        _storageService.getSettings(), // Index 0
-        _storageService.getSmokeEvents(), // Index 1
-        _loadEquivalentsFromCsv(), // NEW INDEX: 2
-        _storageService.getData(), // NEW INDEX: 3
+        _storageService.getSettings(),
+        _storageService.getSmokeEvents(),
+        _loadEquivalentsFromCsv(),
+        _storageService.getData(),
+        _loadExchangeRatesFromCsv(),
       ]);
 
       _settings = results[0] as UserSettings;
       _events = results[1] as List<SmokeEvent>;
-      _equivalents = results[2] as List<EquivalentItem>; // Corrected index
-      final data = results[3] as Map<String, dynamic>; // Corrected index
+      _equivalents = results[2] as List<EquivalentItem>;
+      final data = results[3] as Map<String, dynamic>;
+      _exchangeRates = results[4] as Map<String, double>;
 
-      dailySavings = data['dailySavings']!;
-      weeklyNetSavings = data['weeklyNetSavings']!;
-      monthlyNetSavings = data['monthlyNetSavings']!;
-      dailyAvertedSticks = data['dailyAvertedSticks']!;
-      weeklyAvertedSticks = data['weeklyAvertedSticks']!;
-      monthlyAvertedSticks = data['monthlyAvertedSticks']!;
-      _lastRolloverTimestamp = data['lastRolloverTimestamp']!;
-      unlockedAchievementIds = data['unlockedAchievementIds']!;
-
+      weeklyNetSavings = data['weeklyNetSavings'] ?? 0.0;
+      monthlyNetSavings = data['monthlyNetSavings'] ?? 0.0;
+      _lastRolloverTimestamp = data['lastRolloverTimestamp'] ?? DateTime.now();
+      unlockedAchievementIds = data['unlockedAchievementIds'] ?? {};
       _healthMilestones = HealthData.milestones;
-      _generateBaselineHourlyMap();
-      _updateLatestSmokeEvent();
 
       await _handleDailyRollover();
-      _initializeTimer();
+      _updateDerivedState();
       _checkAchievements();
     } catch (e) {
       dataLoadingError = "An unexpected error occurred: ${e.toString()}";
@@ -109,100 +101,49 @@ class SmokeDataProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void _initializeTimer() {
-    _mainTimer?.cancel();
-    final savingsRate =
-        _savingsService.calculateSavingsRatePerSecond(_settings);
-    final avertedSticksRate = _settings.baselineCigsPerDay / (24 * 60 * 60);
-
-    if (savingsRate <= 0 && avertedSticksRate <= 0) return;
-
-    _mainTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      dailySavings += savingsRate;
-      dailyAvertedSticks += avertedSticksRate;
-      _checkAchievements();
-
-      if (DateTime.now().second % 15 == 0) {
-        _persistData();
-      }
-      notifyListeners();
-    });
-  }
-
-  // --- Event Logging ---
   Future<void> logSmokeEvent() async {
     final newEvent = SmokeEvent(
       timestamp: DateTime.now(),
-      pricePerStick: _settings.pricePerStickInBaseCurrency,
+      pricePerStick: _pricePerStickInBaseCurrency,
     );
     _events.add(newEvent);
-    _updateLatestSmokeEvent();
 
-    dailySavings -= _settings.pricePerStickInBaseCurrency;
-    if (dailySavings < 0) dailySavings = 0;
+    dailyPotentialSavings -= _pricePerStickInBaseCurrency;
+    if (dailyPotentialSavings < 0) dailyPotentialSavings = 0;
 
-    dailyAvertedSticks -= 1;
-    if (dailyAvertedSticks < 0) dailyAvertedSticks = 0;
-
-    await _storageService.saveEvents(_events);
+    _updateDerivedState();
     _checkAchievements();
+    await _storageService.saveEvents(_events);
     await _persistData();
     notifyListeners();
   }
 
-  Future<void> logManualEntry(DateTimeRange range, int packs) async {
-    await _storageService.logManualEntry(range, packs, _settings);
-    await loadInitialData();
-  }
-
-  void _updateLatestSmokeEvent() {
-    if (_events.isEmpty) {
-      _latestSmokeEvent = null;
-      return;
-    }
-    final sortedEvents = List<SmokeEvent>.from(_events)
-      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
-    _latestSmokeEvent = sortedEvents.first;
+  Future<void> updateDailyLimit(int newLimit) async {
+    _settings = _settings.copyWith(dailyLimit: newLimit);
+    await _storageService.saveSettings(_settings);
+    notifyListeners();
   }
 
   Future<void> updateSettings(UserSettings newSettings) async {
     _settings = newSettings;
-    await _storageService.saveSettings(newSettings);
+    await _storageService.saveSettings(_settings);
     await loadInitialData();
   }
 
-  // --- Achievement Logic ---
-  void _checkAchievements() {
-    final newAchievements = _achievementService.checkAchievements(
-      dataProvider: this,
-      previouslyUnlockedIds: unlockedAchievementIds,
-    );
-
-    if (newAchievements.isNotEmpty) {
-      for (final ach in newAchievements) {
-        unlockedAchievementIds.add(ach.id);
-      }
-      newlyUnlockedAchievements.addAll(newAchievements);
+  void _updateDerivedState() {
+    if (_events.isEmpty) {
+      _latestSmokeEvent = null;
+      cigsSmokedToday = 0;
+    } else {
+      final sortedEvents = List<SmokeEvent>.from(_events)
+        ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      _latestSmokeEvent = sortedEvents.first;
     }
-  }
 
-  void clearNewlyUnlockedAchievements() {
-    newlyUnlockedAchievements.clear();
-    notifyListeners();
-  }
-
-  // --- Persistence and Rollover ---
-  Future<void> _persistData() async {
-    await _storageService.saveData(
-      dailySavings: dailySavings,
-      weeklyNetSavings: weeklyNetSavings,
-      monthlyNetSavings: monthlyNetSavings,
-      dailyAvertedSticks: dailyAvertedSticks,
-      weeklyAvertedSticks: weeklyAvertedSticks,
-      monthlyAvertedSticks: monthlyAvertedSticks,
-      lastRolloverTimestamp: _lastRolloverTimestamp,
-      unlockedAchievementIds: unlockedAchievementIds,
-    );
+    final now = DateTime.now();
+    final startOfToday = DateTime(now.year, now.month, now.day);
+    cigsSmokedToday =
+        _events.where((event) => event.timestamp.isAfter(startOfToday)).length;
   }
 
   Future<void> _handleDailyRollover() async {
@@ -212,121 +153,86 @@ class SmokeDataProvider with ChangeNotifier {
         _lastRolloverTimestamp.month, _lastRolloverTimestamp.day);
 
     if (today.isAfter(lastRolloverDay)) {
-      final daysSinceLastRollover = today.difference(lastRolloverDay).inDays;
+      final daysToProcess = today.difference(lastRolloverDay).inDays;
 
-      for (var i = 0; i < daysSinceLastRollover; i++) {
-        final dayToProcess = lastRolloverDay.add(Duration(days: i));
+      for (var i = 0; i < daysToProcess; i++) {
+        final day = lastRolloverDay.add(Duration(days: i));
+        final startOfDay = DateTime(day.year, day.month, day.day);
+        final endOfDay = startOfDay.add(const Duration(days: 1));
 
-        double netSavingsForDay = (i == 0)
-            ? dailySavings
-            : _settings.baselineCigsPerDay *
-                _settings.pricePerStickInBaseCurrency;
-        int netAvertedSticksForDay = (i == 0)
-            ? dailyAvertedSticks.floor()
-            : _settings.baselineCigsPerDay;
+        final smokesOnThatDay = _events
+            .where((e) =>
+                e.timestamp.isAfter(startOfDay) &&
+                e.timestamp.isBefore(endOfDay))
+            .length;
 
-        if (dayToProcess.weekday == DateTime.monday) {
-          weeklyNetSavings = 0;
-          weeklyAvertedSticks = 0;
+        final netSavings = (_settings.historicalAverage - smokesOnThatDay) *
+            _pricePerStickInBaseCurrency;
+
+        if (day.weekday == DateTime.monday) weeklyNetSavings = 0;
+        if (day.day == 1) monthlyNetSavings = 0;
+
+        if (netSavings > 0) {
+          weeklyNetSavings += netSavings;
+          monthlyNetSavings += netSavings;
         }
-        if (dayToProcess.day == 1) {
-          monthlyNetSavings = 0;
-          monthlyAvertedSticks = 0;
-        }
-
-        weeklyNetSavings += netSavingsForDay;
-        monthlyNetSavings += netSavingsForDay;
-        weeklyAvertedSticks += netAvertedSticksForDay;
-        monthlyAvertedSticks += netAvertedSticksForDay;
       }
-
-      dailySavings = 0.0;
-      dailyAvertedSticks = 0.0;
       _lastRolloverTimestamp = now;
-      await _persistData();
+    }
+
+    final startOfToday = DateTime(now.year, now.month, now.day);
+    final smokesTodayCount =
+        _events.where((e) => e.timestamp.isAfter(startOfToday)).length;
+
+    dailyPotentialSavings = (_settings.historicalAverage - smokesTodayCount) *
+        _pricePerStickInBaseCurrency;
+
+    if (dailyPotentialSavings < 0) dailyPotentialSavings = 0;
+
+    await _persistData();
+  }
+
+  Future<void> _persistData() async {
+    await _storageService.saveData(
+      weeklyNetSavings: weeklyNetSavings,
+      monthlyNetSavings: monthlyNetSavings,
+      lastRolloverTimestamp: _lastRolloverTimestamp,
+      unlockedAchievementIds: unlockedAchievementIds,
+    );
+  }
+
+  Future<void> logManualEntry(DateTimeRange range, int packs) async {
+    await _storageService.logManualEntry(
+        range, packs, _settings, _pricePerStickInBaseCurrency);
+    await loadInitialData();
+  }
+
+  void _checkAchievements() {
+    final newAchievements = _achievementService.checkAchievements(
+      dataProvider: this,
+      previouslyUnlockedIds: unlockedAchievementIds,
+    );
+    if (newAchievements.isNotEmpty) {
+      unlockedAchievementIds.addAll(newAchievements.map((ach) => ach.id));
     }
   }
 
-  void _generateBaselineHourlyMap() {
-    final Map<int, double> hourlyDistribution = {
-      for (var i = 0; i < 24; i++) i: 0.0
-    };
-    if (_settings.baselineCigsPerDay <= 0) {
-      _baselineHourlyMap = hourlyDistribution;
-      return;
+  // Load and parse exchange rate from the asset CSV
+  Future<Map<String, double>> _loadExchangeRatesFromCsv() async {
+    try {
+      final rawCsv = await rootBundle.loadString('assets/exchange_rates.csv');
+      final List<List<dynamic>> csvTable =
+          const CsvToListConverter(eol: '\n').convert(rawCsv);
+
+      return {
+        for (var row in csvTable)
+          row[0].toString().trim(): double.tryParse(row[1].toString()) ?? 1.0,
+      };
+    } catch (e) {
+      debugPrint("Error loading exchange_rates.csv: $e");
+      dataLoadingError = "Failed to load 'exchange_rates.csv'.";
+      return {'USD': 1.0, 'IDR': 16000.0};
     }
-
-    final selectedTimes = _settings.smokingTimes;
-    final timeRanges = {
-      'In the Morning': {7, 8, 9},
-      'During Work Breaks': {10, 15},
-      'After Meals': {8, 13, 19},
-      'While Driving': {7, 8, 17, 18},
-      'With Coffee/Alcohol': {9, 16, 20},
-      'Late at Night': {22, 23, 0, 1}
-    };
-
-    final coreWakingHours = {
-      6,
-      7,
-      8,
-      9,
-      10,
-      11,
-      12,
-      13,
-      14,
-      15,
-      16,
-      17,
-      18,
-      19,
-      20,
-      21,
-      22
-    };
-    final lateNightHours = {22, 23, 0, 1};
-
-    Set<int> highTrafficHours = {};
-    for (var time in selectedTimes) {
-      if (timeRanges.containsKey(time)) {
-        highTrafficHours.addAll(timeRanges[time]!);
-      }
-    }
-
-    Set<int> allWakingHours = Set.from(coreWakingHours);
-    if (selectedTimes.contains('Late at Night')) {
-      allWakingHours.addAll(lateNightHours);
-    }
-
-    highTrafficHours = highTrafficHours.intersection(allWakingHours);
-
-    final otherWakingHours = allWakingHours.difference(highTrafficHours);
-
-    final double highTrafficCigs = _settings.baselineCigsPerDay * 0.7;
-    final double otherCigs = _settings.baselineCigsPerDay * 0.3;
-
-    if (highTrafficHours.isNotEmpty) {
-      final double cigsPerHighTrafficHour =
-          highTrafficCigs / highTrafficHours.length;
-      for (var hour in highTrafficHours) {
-        hourlyDistribution[hour] =
-            (hourlyDistribution[hour] ?? 0) + cigsPerHighTrafficHour;
-      }
-    }
-
-    if (otherWakingHours.isNotEmpty) {
-      final double cigsPerOtherHour = (highTrafficHours.isEmpty
-              ? _settings.baselineCigsPerDay
-              : otherCigs) /
-          otherWakingHours.length;
-      for (var hour in otherWakingHours) {
-        hourlyDistribution[hour] =
-            (hourlyDistribution[hour] ?? 0) + cigsPerOtherHour;
-      }
-    }
-
-    _baselineHourlyMap = hourlyDistribution;
   }
 
   Future<List<EquivalentItem>> _loadEquivalentsFromCsv() async {
@@ -334,13 +240,12 @@ class SmokeDataProvider with ChangeNotifier {
       final rawCsv = await rootBundle.loadString('assets/equivalents.csv');
       final List<List<dynamic>> csvTable =
           const CsvToListConverter(eol: '\n').convert(rawCsv).sublist(1);
-
       return csvTable
           .where((row) => row.length > 2)
           .map((row) => EquivalentItem(
                 name: row[0].toString(),
                 price: int.tryParse(row[1].toString()) ?? 0,
-                iconIdentifier: row[2].toString(),
+                iconIdentifier: row[2].toString().trim(),
               ))
           .toList();
     } catch (e) {
