@@ -1,6 +1,7 @@
 // lib/widgets/action_button_carousel.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:smoked_1/data/coping_tips.dart';
 import 'package:smoked_1/providers/smoke_data_provider.dart';
@@ -23,7 +24,7 @@ class _ActionButtonCarouselState extends State<ActionButtonCarousel> {
     super.initState();
     _pageController = PageController(
       initialPage: 0,
-      viewportFraction: 0.6,
+      viewportFraction: 0.5,
     );
   }
 
@@ -32,28 +33,6 @@ class _ActionButtonCarouselState extends State<ActionButtonCarousel> {
     _pageController.dispose();
     super.dispose();
   }
-
-  // void _showSetGoalModal(BuildContext context) {
-  //   showModalBottomSheet(
-  //     context: context,
-  //     isScrollControlled: true,
-  //     builder: (context) {
-  //       return Padding(
-  //         padding:
-  //             EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-  //         child: Container(
-  //             decoration: BoxDecoration(
-  //               color: Theme.of(context).cardColor,
-  //               borderRadius: const BorderRadius.only(
-  //                 topLeft: Radius.circular(24.0),
-  //                 topRight: Radius.circular(24.0),
-  //               ),
-  //             ),
-  //             child: const SetLimitScreen()),
-  //       );
-  //     },
-  //   );
-  // }
 
   void _showCopingOptions(BuildContext context) {
     showDialog(
@@ -100,6 +79,7 @@ class _ActionButtonCarouselState extends State<ActionButtonCarousel> {
 
       final List<Widget> actionButtons = [
         _ActionButton(
+          // Action Button "I smoked one "
           label: "I smoked one",
           subtitle: dailyGoal != null ? "Your Limit:" : null,
           // Counter Customization
@@ -129,6 +109,7 @@ class _ActionButtonCarouselState extends State<ActionButtonCarousel> {
           },
         ),
         _ActionButton(
+          // Action Button "Ride the Wave"
           label: "Ride the Wave",
           subtitle: "This moment will pass",
           color: Colors.lightBlue,
@@ -171,8 +152,10 @@ class _ActionButtonCarouselState extends State<ActionButtonCarousel> {
   }
 }
 
-// REVISED: The helper widget now accepts a Widget for the counter.
-class _ActionButton extends StatelessWidget {
+const double buttonElev = 50.0;
+const int durationElev = 200; // Default duration for the button
+
+class _ActionButton extends StatefulWidget {
   final String label;
   final String? subtitle;
   final Widget? counter;
@@ -188,45 +171,94 @@ class _ActionButton extends StatelessWidget {
   });
 
   @override
+  State<_ActionButton> createState() => _ActionButtonState();
+}
+
+class _ActionButtonState extends State<_ActionButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _elevationAnimation;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: durationElev),
+      vsync: this,
+    );
+    _elevationAnimation = Tween<double>(begin: buttonElev, end: 0)
+        .animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.9)
+        .animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handlePress() {
+    HapticFeedback.mediumImpact();
+    _controller.forward().then((_) {
+      widget.onPressed();
+      _controller.reverse();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return SizedBox(
-        width: 180,
-        height: 180,
-        child: ElevatedButton(
-          onPressed: onPressed,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: color,
-            foregroundColor: Colors.white,
-            shape: const CircleBorder(),
-            elevation: 10,
-            shadowColor: color.withAlpha(100),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+    //Render the action button with animation
+    return AnimatedBuilder(
+      animation: _elevationAnimation,
+      builder: (context, child) {
+        return ScaleTransition(
+          scale: _scaleAnimation,
+          child: SizedBox(
+              width: 180,
+              height: 180,
+              child: ElevatedButton(
+                onPressed: _handlePress,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: widget.color,
+                  foregroundColor: Colors.white,
+                  shape: const CircleBorder(),
+                  elevation: _elevationAnimation.value,
+                  shadowColor: widget.color.withAlpha(100),
+                  animationDuration: Duration.zero,
+                  padding: const EdgeInsets.all(20),
                 ),
-              ),
-              if (subtitle != null) ...[
-                const SizedBox(height: 0),
-                Text(
-                  subtitle!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 14),
-                ),
-              ],
-              if (counter != null) ...[
-                const SizedBox(height: 0),
-                // render counter widget --
-                counter!,
-              ],
-            ],
+                child: child,
+              )),
+        );
+      },
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            widget.label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-        ));
+          if (widget.subtitle != null) ...[
+            const SizedBox(height: 0),
+            Text(
+              widget.subtitle!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 14),
+            ),
+          ],
+          if (widget.counter != null) ...[
+            const SizedBox(height: 0),
+            // render counter widget --
+            widget.counter!,
+          ],
+        ],
+      ),
+    );
   }
 }

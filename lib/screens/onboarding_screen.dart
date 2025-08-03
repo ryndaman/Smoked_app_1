@@ -49,21 +49,28 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _finishOnboarding() async {
+
+    final dataProvider = Provider.of<SmokeDataProvider>(context, listen: false);
+    
     // Final save operation
-    final baselineValue = int.tryParse(_baselineCigsController.text) ??
+    final newHistoricalAverage = int.tryParse(_baselineCigsController.text) ??
         AppConstants.defaultCigsPerPack;
     final newPrice =
         int.tryParse(_priceController.text) ?? AppConstants.defaultPricePerPack;
     final newCigsPerPack = int.tryParse(_cigsPerPackController.text) ??
         AppConstants.defaultCigsPerPack;
 
-    await _storageService.saveSettings(UserSettings(
+    final newSettings = UserSettings(
       pricePerPack: newPrice,
       cigsPerPack: newCigsPerPack,
       preferredCurrency: _selectedCurrency,
       smokingTimes: _selectedTimes.toList(),
-      historicalAverage: baselineValue,
-    ));
+      historicalAverage: newHistoricalAverage,
+    );
+
+
+
+    await dataProvider.updateSettings(newSettings);
 
     await _storageService.setOnboarded();
 
@@ -363,8 +370,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             }),
           ),
 
-          // Next/Finish Button
-          // MODIFIED: Added icon to button
           ElevatedButton.icon(
             onPressed: _nextPage,
             style: ElevatedButton.styleFrom(

@@ -208,6 +208,7 @@ class _LogScreenState extends State<LogScreen> {
 
   void _showManualEntryDialog(SmokeDataProvider dataProvider) async {
     final dateRange = await showDateRangePicker(
+      helpText: 'Log your missed packs',
       context: context,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
