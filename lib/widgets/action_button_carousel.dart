@@ -24,7 +24,7 @@ class _ActionButtonCarouselState extends State<ActionButtonCarousel> {
     super.initState();
     _pageController = PageController(
       initialPage: 0,
-      viewportFraction: 0.5,
+      viewportFraction: 0.64,
     );
   }
 
