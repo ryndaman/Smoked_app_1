@@ -363,8 +363,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             }),
           ),
 
-          // Next/Finish Button
-          // MODIFIED: Added icon to button
           ElevatedButton.icon(
             onPressed: _nextPage,
             style: ElevatedButton.styleFrom(
