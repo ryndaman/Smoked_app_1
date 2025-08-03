@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "101549751474",
+    "project_id": "smoked-c8150",
+    "storage_bucket": "smoked-c8150.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:101549751474:android:c3349d686877d2584bddab",
+        "android_client_info": {
+          "package_name": "com.rynd.smoked_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBdZB0cQGmb03f-NEtCJ7G_KOGDkE6ZG84"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:101549751474:android:651402ee0c367a704bddab",
+        "android_client_info": {
+          "package_name": "com.ryndsoft.smoked_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBdZB0cQGmb03f-NEtCJ7G_KOGDkE6ZG84"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

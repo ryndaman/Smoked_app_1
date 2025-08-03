@@ -2,6 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'package:smoked_1/providers/smoke_data_provider.dart';
 import 'package:smoked_1/providers/theme_provider.dart'; // IMPORTED: Theme Provider
 import 'package:smoked_1/screens/home_page.dart';
@@ -9,9 +11,15 @@ import 'package:smoked_1/screens/onboarding_screen.dart';
 import 'package:smoked_1/screens/splash_screen.dart';
 import 'package:smoked_1/services/local_storage_service.dart';
 
-void main() {
+void main() async {
+  //firebase-analytics
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  //app starts here
   runApp(
-    // MODIFIED: Wrap with MultiProvider to handle both data and theme.
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (context) => SmokeDataProvider()),

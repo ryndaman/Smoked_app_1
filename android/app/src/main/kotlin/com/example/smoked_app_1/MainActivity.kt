@@ -1,4 +1,4 @@
-package com.example.smoked_app_1
+package com.rynd.smoked_app
 
 import io.flutter.embedding.android.FlutterActivity
 
