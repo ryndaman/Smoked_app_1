@@ -1,6 +1,7 @@
 // lib/providers/smoke_data_provider.dart
 
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:csv/csv.dart';
@@ -202,8 +203,47 @@ class SmokeDataProvider with ChangeNotifier {
   }
 
   Future<void> logManualEntry(DateTimeRange range, int packs) async {
-    await _storageService.logManualEntry(
-        range, packs, _settings, _pricePerStickInBaseCurrency);
+    if (settings.cigsPerPack <= 0 || packs <= 0) return;
+
+    final totalSticks = packs * settings.cigsPerPack;
+    final pricePerStickInBase = _pricePerStickInBaseCurrency;
+    final newEvents = <SmokeEvent>[];
+    final random = Random();
+
+    // Define a list of typical waking hours for more realistic distribution.
+    const wakingHours = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23];
+
+    // 1. Distribute sticks evenly across the selected days.
+    final startDay = DateTime(range.start.year, range.start.month, range.start.day);
+    final endDay = DateTime(range.end.year, range.end.month, range.end.day);
+    final numberOfDays = endDay.difference(startDay).inDays + 1;
+    final sticksPerDay = totalSticks ~/ numberOfDays;
+    int remainderSticks = totalSticks % numberOfDays;
+
+    // 2. For each day, create events with randomized timestamps within waking hours.
+    for (int i = 0; i < numberOfDays; i++) {
+      final currentDay = startDay.add(Duration(days: i));
+      int sticksForThisDay = sticksPerDay + (remainderSticks > 0 ? 1 : 0);
+      if (remainderSticks > 0) remainderSticks--;
+
+      for (int j = 0; j < sticksForThisDay; j++) {
+        // 3. Modulate the output by picking a random hour and minute.
+        final hour = wakingHours[random.nextInt(wakingHours.length)];
+        final minute = random.nextInt(60);
+        final timestamp = DateTime(currentDay.year, currentDay.month, currentDay.day, hour, minute);
+
+        newEvents.add(
+          SmokeEvent(
+            timestamp: timestamp,
+            pricePerStick: pricePerStickInBase,
+          ),
+        );
+      }
+    }
+
+    // 4. Save the newly generated events and reload all data.
+    _events.addAll(newEvents);
+    await _storageService.saveEvents(_events);
     await loadInitialData();
   }
 

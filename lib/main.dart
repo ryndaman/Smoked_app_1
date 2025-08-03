@@ -9,7 +9,9 @@ import 'package:smoked_1/screens/onboarding_screen.dart';
 import 'package:smoked_1/screens/splash_screen.dart';
 import 'package:smoked_1/services/local_storage_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
   runApp(
     // MODIFIED: Wrap with MultiProvider to handle both data and theme.
     MultiProvider(
